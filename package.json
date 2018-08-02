@@ -1,6 +1,6 @@
 {
     "name": "api-manage",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "api服务管理",
     "main": "es",
     "scripts": {
@@ -10,15 +10,15 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/zhouzuchuan/react-enhanced.git"
+        "url": "git+https://github.com/zhouzuchuan/api-manage.git"
     },
     "keywords": ["api-manage", "api", "management"],
     "author": "Fezzc",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/zhouzuchuan/react-enhanced/issues"
+        "url": "https://github.com/zhouzuchuan/api-manage/issues"
     },
-    "homepage": "https://github.com/zhouzuchuan/react-enhanced#readme",
+    "homepage": "https://github.com/zhouzuchuan/api-manage#readme",
     "dependencies": {
         "axios": "^0.18.0"
     },

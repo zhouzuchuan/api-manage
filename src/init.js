@@ -1,10 +1,8 @@
 import apiManage from './store';
 import template from './template';
 
-console.log(apiManage.serviceList);
-
 export default ({ request = apiManage.request, list }) => {
-    return Object.entries(list).reduce(
+    apiManage.serviceList = Object.entries(list).reduce(
         (r, [method, api]) => ({
             ...r,
             ...Object.entries(api).reduce(
@@ -20,6 +18,6 @@ export default ({ request = apiManage.request, list }) => {
                 {}
             )
         }),
-        apiManage.serviceList
+        {}
     );
 };

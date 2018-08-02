@@ -83,14 +83,12 @@ var slicedToArray = function () {
   };
 }();
 
-console.log(apiManage.serviceList);
-
 var init = (function (_ref) {
     var _ref$request = _ref.request,
         request = _ref$request === undefined ? apiManage.request : _ref$request,
         list = _ref.list;
 
-    return Object.entries(list).reduce(function (r, _ref2) {
+    apiManage.serviceList = Object.entries(list).reduce(function (r, _ref2) {
         var _ref3 = slicedToArray(_ref2, 2),
             method = _ref3[0],
             api = _ref3[1];
@@ -107,7 +105,7 @@ var init = (function (_ref) {
                 }, method === 'get' ? 'params' : 'data', params));
             }));
         }, {}));
-    }, apiManage.serviceList);
+    }, {});
 });
 
 var getService = (function () {
