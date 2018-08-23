@@ -1,8 +1,8 @@
 {
     "name": "api-manage",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "api服务管理",
-    "main": "es",
+    "main": "cjs",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "build": "rollup -c",
@@ -12,7 +12,11 @@
         "type": "git",
         "url": "git+https://github.com/zhouzuchuan/api-manage.git"
     },
-    "keywords": ["api-manage", "api", "management"],
+    "keywords": [
+        "api-manage",
+        "api",
+        "management"
+    ],
     "author": "Fezzc",
     "license": "MIT",
     "bugs": {
