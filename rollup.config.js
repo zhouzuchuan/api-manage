@@ -6,12 +6,8 @@ export default {
     input: 'src/index.js',
     output: [
         {
-            file: 'cjs/index.js',
+            file: 'lib/index.js',
             format: 'cjs'
-        },
-        {
-            file: 'es/index.js',
-            format: 'es'
         }
     ],
     external: ['axios'],

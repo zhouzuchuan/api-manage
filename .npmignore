@@ -60,6 +60,8 @@ typings/
 webpack.config.js
 rollup.config.js
 .gitignore
+.prettierignore
+.editorconfig
 *.lock
 src/*
 example/*
