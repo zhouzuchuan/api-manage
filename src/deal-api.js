@@ -1,5 +1,5 @@
 export default data =>
-    Object.entries(apiList).reduce(
+    Object.entries(data).reduce(
         (r, [key, apis]) => ({
             ...r,
             ...Object.entries(apis).reduce(
