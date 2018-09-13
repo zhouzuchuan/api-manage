@@ -6,20 +6,19 @@ export default ({ request = apiManage.request, list }) => {
         (r, [method, api]) => ({
             ...r,
             ...Object.entries(api).reduce((r2, [name, requestPath]) => {
-                const a = function(params, data) {
-                    return request({
+                const apiFun = (params, data) =>
+                    request({
                         method,
                         url: template(requestPath, data),
                         [method === 'get' ? 'params' : 'data']: params
                     });
-                };
 
                 const funName = name.replace(/^api/, 'serve');
 
-                Object.defineProperty(a, 'name', { value: funName });
+                Object.defineProperty(apiFun, 'name', { value: funName });
                 return {
                     ...r2,
-                    [funName]: a
+                    [funName]: apiFun
                 };
             }, {})
         }),
