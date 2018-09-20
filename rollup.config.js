@@ -8,10 +8,10 @@ export default {
         {
             file: 'lib/index.js',
             format: 'cjs'
-        },
-        {
-            file: '../react-enhanced-cli/boilerplates/app/src/api-manage.js',
-            format: 'cjs'
+            // },
+            // {
+            //     file: '../react-enhanced-cli/boilerplates/app/src/api-manage.js',
+            //     format: 'cjs'
         }
     ],
     external: ['axios'],
