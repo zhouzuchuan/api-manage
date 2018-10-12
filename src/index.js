@@ -1,11 +1,13 @@
 import init from './init';
 import getService from './getService';
 import extractApi from './deal-api';
+import bindApi from './bind-api';
 
-let apiManage = {
+export { init, getService, extractApi, bindApi };
+
+export default {
     init,
     getService,
-    extractApi
+    extractApi,
+    bindApi
 };
-
-export default apiManage;

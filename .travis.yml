@@ -1,7 +1,32 @@
+# 设置语言
 language: node_js
-node_js:
-    - "6"
-    - "7"
-    - "8"
-after_success:
-    - npm run build
+# 设置相应版本
+node_js: stable
+cache:
+    apt: true
+    directories:
+        # 缓存不经常更改的内容
+        - node_modules
+before_install:
+    # 更改时区
+    - export TZ='Asia/ShangHai'
+    # 为shell文件添加可执行权限
+    - chmod +x ./publish-to-page.sh
+install:
+    # 安装hexo及插件
+    - npm install
+script:
+    # 清除
+    - hexo clean
+    # 生成
+    - hexo g
+after_script:
+    - ./publish-to-page.sh
+branches:
+    # 只监测 source 分支
+    only:
+        - source
+env:
+    # 全局变量
+    global:
+        - GH_REF: github.com/zhouzuchuan/zhouzuchuan.github.io.git

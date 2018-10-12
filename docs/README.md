@@ -107,10 +107,6 @@ const { apiGetToken } = apiManage.extractApi(apiList);
 const { apiGetToken } = apiManage.extractApi(apiList, true);
 ```
 
-### bindApi(fns [, params])
-
-组合 API，提供 api 清单
-
 ## Vue 使用
 
 ```js
