@@ -109,7 +109,47 @@ const { apiGetToken } = apiManage.extractApi(apiList, true);
 
 ### bindApi(fns [, params])
 
-组合 API，提供 api 清单
+组合 API，提供 api 清单，用来组织大型项目大量的 api，方便管理以及调试
+
+```js
+// a.js
+module.exports = ({ server }) => ({
+    get: {
+        apiLogin: `${server}/login`,
+        apiGetInfo: `${server}/info`
+    }
+});
+```
+
+```js
+// b.js
+module.exports = ({ server }) => ({
+    get: {
+        apiGetList: `${server}/order/list`
+    },
+    put: {
+        apiChangeInfo: `${server}/info`
+    }
+});
+```
+
+```js
+// index.js
+const { bindApi } = require('api-manage');
+
+module.exports = bindApi([require('./a'), require('./b')], {
+    server: ''
+});
+
+// get: {
+//     apiLogin: `${server}/login`,
+//     apiGetInfo: `${server}/info`
+//     apiGetList: `${server}/order/list`
+// },
+// put: {
+//     apiChangeInfo: `${server}/info`
+// }
+```
 
 ## Vue 使用
 
