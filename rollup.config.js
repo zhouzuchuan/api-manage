@@ -10,10 +10,6 @@ export default {
         {
             file: 'lib/index.js',
             format: 'cjs'
-        },
-        {
-            file: path.resolve(__dirname, '../../dlp-mes（达力普）/src/api-manage.js'),
-            format: 'es'
         }
     ],
     external: ['axios'],

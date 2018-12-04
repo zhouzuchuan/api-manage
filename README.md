@@ -51,18 +51,31 @@ module.exports = {
 };
 ```
 
-### init({[request,] list})
+### init({[request,] list, matchStr, replaceStr})
 
 ```
- request： 默认采用 axios，可以指定封装后的 axios
- list：清单列表
+request： 默认采用 axios，可以指定封装后的 axios
+
+list：清单列表
+
+matchStr：匹配的字符标识，默认为'api'
+
+replaceStr：替换的字符标识，默认为'serve'
 ```
+
+```
+PS: 默认在 api 清单中申明的变量 "apiGetToken" 则在组件内调动使用 "serveGetToken"
+
+```
+
+#### 初始化
 
 ```js
 import apiManage from 'api-manage';
 import apiList from '../api'; // 引入清单
 import axios from 'axios';
 
+// 可以自定义axios对象
 const service = axios.create({
     timeout: 2000
 });
@@ -73,6 +86,69 @@ const serviceList = apiManage.init({
     request: service,
     list: apiList
 });
+```
+
+#### 调用
+
+封装后的函数支持两个参数： [请求需要的参数、路径匹配参数]
+
+支持复杂接口匹配，调用，如： '/base/:id/:name'
+
+```js
+// api清单
+{
+    get: {
+        apiGetToken: `/getToken/:id/:name`
+    },
+}
+// 调用
+serveGetToken({name: 'api-manage'}, {id: '1', name: 'api-manage'})
+
+```
+
+上面代码表示：在`serveGetToken`中 需要想后端传递参数 `{name: 'api-manage'}`，路径需要匹配的 `{id: '1', name: 'api-manage'}`。 由于上面定义的是 `GET` 方法，所以请求接口是 `/getToken/1/api-manage?name=api-manage`。这样可以满足定义路径格式
+
+支持两种方式简写
+
+如果需要匹配的数据大于等于 2 个，下面两种方法相同
+
+```js
+
+// api清单
+{
+    get: {
+        apiGetToken: `/getToken/:id/:name`
+    },
+}
+
+serveGetToken({name: 'api-manage'}, {id: '1', name: 'api-manage'})
+// 或者
+serveGetToken({name: 'api-manage'}, ['1', 'api-manage'])
+
+```
+
+如果需要匹配的数据就 1 个，下面三种种方法相同
+
+```js
+
+// api清单
+{
+    get: {
+        apiGetToken: `/getToken/:id`
+    },
+}
+
+
+serveGetToken({name: 'api-manage'}, {id: '1'})
+// 或者
+serveGetToken({name: 'api-manage'}, ['1'])
+// 或者
+serveGetToken({name: 'api-manage'}, '1')
+
+```
+
+```
+PS: 如果后端不需要参数，但是接口需要匹配参数 则第一个参数需要传递 "{}", 如 serveGetToke({}, '1')
 ```
 
 ### getService
@@ -91,10 +167,13 @@ const serviceList = apiManage.getService();
 
 ### extractApi(apiList [, type = false])
 
-提取 API，主要用于 dataMock 的配合使用，以及应用中需要用到 API 的场景（上传等）
+提取 API，主要用于 [data-mock](https://github.com/zhouzuchuan/dataMock) 的配合使用，以及应用中需要用到 API 的场景（上传等）
 
-    apiList: API清单
-    type: 获取api类型，默认为false，返回包括请求类型
+```
+apiList: API清单
+
+type: 获取api类型，默认为false，返回包括请求类型
+```
 
 ```js
 import apiManage from 'api-manage';
@@ -141,6 +220,7 @@ module.exports = bindApi([require('./a'), require('./b')], {
     server: ''
 });
 
+// 导出的格式如下
 // get: {
 //     apiLogin: `${server}/login`,
 //     apiGetInfo: `${server}/info`

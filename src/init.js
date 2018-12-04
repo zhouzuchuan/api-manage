@@ -1,7 +1,7 @@
 import apiManage from './store';
 import template from './template';
 
-export default ({ request = apiManage.request, list }) => {
+export default ({ request = apiManage.request, list, matchStr = 'api', replaceStr = 'serve' }) => {
     const serviceList = Object.entries(list).reduce(
         (r, [method, api]) => ({
             ...r,
@@ -12,7 +12,7 @@ export default ({ request = apiManage.request, list }) => {
                         url: template(requestPath, data),
                         [method === 'get' ? 'params' : 'data']: params
                     });
-                const funName = name.replace(/^api/, 'serve');
+                const funName = name.replace(RegExp('^' + matchStr), replaceStr);
                 Reflect.defineProperty(apiFun, 'name', { value: funName });
                 return {
                     ...r2,
