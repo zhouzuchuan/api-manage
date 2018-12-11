@@ -1,17 +1,20 @@
 import apiManage from './store';
 import template from './template';
 
-export default ({ request = apiManage.request, list, matchStr = 'api', replaceStr = 'serve' }) => {
+export default ({ request = apiManage.request, list, matchStr = 'api', replaceStr = 'serve', customize = {} }) => {
     const serviceList = Object.entries(list).reduce(
         (r, [method, api]) => ({
             ...r,
             ...Object.entries(api).reduce((r2, [name, requestPath]) => {
-                const apiFun = (params, data) =>
-                    request({
-                        method,
-                        url: template(requestPath, data),
-                        [method === 'get' ? 'params' : 'data']: params
-                    });
+                const apiFun =
+                    customize[method] ||
+                    function() {
+                        return request({
+                            method,
+                            url: template(requestPath, tplData),
+                            [method === 'get' ? 'params' : 'data']: params
+                        });
+                    };
                 const funName = name.replace(RegExp('^' + matchStr), replaceStr);
                 Reflect.defineProperty(apiFun, 'name', { value: funName });
                 return {
