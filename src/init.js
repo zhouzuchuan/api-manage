@@ -8,7 +8,7 @@ export default ({ request = apiManage.request, list, matchStr = 'api', replaceSt
             ...Object.entries(api).reduce((r2, [name, requestPath]) => {
                 const apiFun =
                     customize[method] ||
-                    function() {
+                    function(params, tplData) {
                         return request({
                             method,
                             url: template(requestPath, tplData),
