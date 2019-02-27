@@ -1,11 +1,12 @@
 {
     "name": "api-manage",
-    "version": "0.2.1",
+    "version": "0.3.0",
     "description": "api服务管理解决方案",
     "main": "lib",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "build": "rollup -c",
+        "precommit": "npm run build",
         "coveralls": "cat ./coverage/lcov.info | coveralls"
     },
     "repository": {

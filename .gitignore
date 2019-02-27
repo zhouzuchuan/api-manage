@@ -59,6 +59,8 @@ typings/
 
 webpack.config.js
 src/.*
+
+lib/*
 releaseNotes.md
 .prettierignore
 .editorconfig
