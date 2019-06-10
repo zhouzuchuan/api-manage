@@ -6,6 +6,7 @@ export default ({
     list,
     matchStr = 'api',
     replaceStr = 'serve',
+    validate = () => true
     customize = {},
 }) => {
     const serviceList = Object.entries(list).reduce(
@@ -15,11 +16,25 @@ export default ({
                 const apiFun =
                     customize[method] ||
                     function(params, tplData) {
-                        return request({
-                            method,
-                            url: template(requestPath, tplData),
-                            [method === 'get' ? 'params' : 'data']: params,
-                        });
+
+
+                        return new Promise((resolve) => {
+                            request({
+                                method,
+                                url: template(requestPath, tplData),
+                                [method === 'get' ? 'params' : 'data']: params,
+                            }).then(res => {
+                                if (validate(res)) {
+                                    resolve(res)
+                                }
+                            });
+                        })
+
+                        // return request({
+                        //     method,
+                        //     url: template(requestPath, tplData),
+                        //     [method === 'get' ? 'params' : 'data']: params,
+                        // });
                     };
                 const funName = name.replace(RegExp('^' + matchStr), replaceStr);
                 Reflect.defineProperty(apiFun, 'name', { value: funName });
