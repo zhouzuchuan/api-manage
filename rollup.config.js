@@ -9,19 +9,17 @@ export default {
     output: [
         {
             file: 'lib/index.js',
-            format: 'cjs'
-        }
+            format: 'cjs',
+        },
     ],
     external: ['axios'],
     plugins: [
-        resolve({
-            jsnext: true
-        }),
+        resolve(),
         commonjs({
-            include: 'node_modules/**'
+            include: 'node_modules/**',
         }),
         babel({
-            exclude: ['node_modules/**']
-        })
-    ]
+            exclude: 'node_modules/**', // only transpile our source code
+        }),
+    ],
 };
