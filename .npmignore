@@ -71,3 +71,13 @@ scripts/*
 releaseNotes.md
 plan.md
 
+
+jest.config.js
+
+test/
+.babelrc
+.travis.yml
+publish-to-page.sh
+rollup.config.js
+coverage/
+docs/
