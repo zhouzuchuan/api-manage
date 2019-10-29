@@ -12,7 +12,7 @@ export default {
             format: 'cjs',
         },
     ],
-    external: ['axios'],
+    external: ['axios', 'urijs'],
     plugins: [
         resolve(),
         commonjs({

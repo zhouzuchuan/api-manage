@@ -1,6 +1,6 @@
 {
     "name": "api-manage",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "api服务管理解决方案",
     "main": "lib",
     "scripts": {
@@ -25,7 +25,8 @@
     },
     "homepage": "https://github.com/zhouzuchuan/api-manage#readme",
     "dependencies": {
-        "axios": "^0.18.0"
+        "axios": "^0.18.0",
+        "urijs": "^1.19.2"
     },
     "devDependencies": {
         "@babel/core": "^7.4.5",

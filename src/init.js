@@ -1,3 +1,4 @@
+import URI from 'urijs';
 import apiManage from './store';
 import template from './template';
 
@@ -11,12 +12,18 @@ export default ({
 }) => {
     const filterArr = [];
     const serviceList = Object.entries(list).reduce(
-        (r, [method, api]) => ({
+        (r, [method, apis]) => ({
             ...r,
-            ...Object.entries(api).reduce((r2, [name, requestPath]) => {
-                const apiFun =
-                    customize[method] ||
-                    function(params, tplData) {
+            ...Object.entries(apis).reduce((r2, [name, requestPath]) => {
+                let apiFun = () => null;
+
+                const funName = name.replace(RegExp('^' + matchStr), replaceStr);
+
+                //是否有自定义
+                if (customize[method]) {
+                    apiFun = customize[method].bind(requestPath);
+                } else {
+                    apiFun = function(params, tplData) {
                         return new Promise((resolve, reject) => {
                             request({
                                 method,
@@ -36,12 +43,33 @@ export default ({
                                 .catch(reject);
                         });
                     };
+
+                    // 设置请求函数名称
+                    Reflect.defineProperty(apiFun, 'name', { value: funName });
+
+                    Object.setPrototypeOf(apiFun, {
+                        resolve(params, tplData) {
+                            const splitPath = URI(template(requestPath, tplData));
+                            return {
+                                fn: apiFun(params, tplData),
+                                api: requestPath,
+                                name,
+                                method,
+                                fullApi: method === 'get' ? splitPath.query(params) : splitPath,
+                            };
+                        },
+                    });
+                }
+
+                // 设置请求函数名称
+                Reflect.defineProperty(apiFun, 'name', { value: funName });
+
+                // 是否有前缀与设置不一样的清单名称
                 if (!name.startsWith(matchStr)) {
                     filterArr.push(name);
                     return r2;
                 }
-                const funName = name.replace(RegExp('^' + matchStr), replaceStr);
-                Reflect.defineProperty(apiFun, 'name', { value: funName });
+
                 return {
                     ...r2,
                     [funName]: apiFun,
