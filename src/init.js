@@ -22,7 +22,7 @@ export default ({
                 //是否有自定义
                 if (customize[method]) {
                     // 自定义必须为函数
-                    if (typeof customize[method] === function) apiFun = customize[method].bind(requestPath);
+                    if (typeof customize[method] === 'function') apiFun = customize[method].bind(requestPath);
                 } else if (request[method]) {
                     apiFun = function(params, tplData) {
                         return new Promise((resolve, reject) => {
