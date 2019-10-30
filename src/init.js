@@ -64,7 +64,7 @@ export default ({
                         });
                         return {
                             fn,
-                            api: requestPath,
+                            url: requestPath,
                             name: name,
                             method: method,
                             hostname,
@@ -72,7 +72,7 @@ export default ({
                             port,
                             protocol,
                             query,
-                            requestAddress: dealURI.toString(),
+                            requestUrl: dealURI.toString(),
                         };
                     },
                     bind: Function.prototype.bind,
