@@ -53,7 +53,7 @@ export default ({
                     resolve: function resolve(data, tplData) {
                         const splitPath = URI(template(requestPath, tplData));
 
-                        const dealURI = method === 'get' ? splitPath.addquery(data) : splitPath;
+                        const dealURI = method === 'get' ? splitPath.addQuery(data) : splitPath;
 
                         const { hostname, path, port, protocol, query } = dealURI._parts;
 
