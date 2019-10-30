@@ -21,8 +21,9 @@ export default ({
 
                 //是否有自定义
                 if (customize[method]) {
-                    apiFun = customize[method].bind(requestPath);
-                } else {
+                    // 自定义必须为函数
+                    if (typeof customize[method] === function) apiFun = customize[method].bind(requestPath);
+                } else if (request[method]) {
                     apiFun = function(params, tplData) {
                         return new Promise((resolve, reject) => {
                             request({
@@ -43,29 +44,44 @@ export default ({
                                 .catch(reject);
                         });
                     };
-
-                    // 设置请求函数名称
-                    Reflect.defineProperty(apiFun, 'name', { value: funName });
-
-                    Object.setPrototypeOf(apiFun, {
-                        resolve(params, tplData) {
-                            const splitPath = URI(template(requestPath, tplData));
-                            return {
-                                fn: apiFun(params, tplData),
-                                api: requestPath,
-                                name,
-                                method,
-                                fullApi: method === 'get' ? splitPath.query(params) : splitPath,
-                            };
-                        },
-                    });
                 }
 
                 // 设置请求函数名称
                 Reflect.defineProperty(apiFun, 'name', { value: funName });
 
-                // 是否有前缀与设置不一样的清单名称
+                Object.setPrototypeOf(apiFun, {
+                    resolve: function resolve(data, tplData) {
+                        const splitPath = URI(template(requestPath, tplData));
+
+                        const dealURI = method === 'get' ? splitPath.addquery(data) : splitPath;
+
+                        const { hostname, path, port, protocol, query } = dealURI._parts;
+
+                        const fn = apiFun.bind(apiFun, ...arguments);
+
+                        Reflect.defineProperty(fn, 'name', {
+                            value: funName,
+                        });
+                        return {
+                            fn,
+                            api: requestPath,
+                            name: name,
+                            method: method,
+                            hostname,
+                            path,
+                            port,
+                            protocol,
+                            query,
+                            requestAddress: dealURI.toString(),
+                        };
+                    },
+                    bind: Function.prototype.bind,
+                    call: Function.prototype.call,
+                    apply: Function.prototype.apply,
+                });
+
                 if (!name.startsWith(matchStr)) {
+                    // 是否有前缀与设置不一样的清单名称
                     filterArr.push(name);
                     return r2;
                 }
