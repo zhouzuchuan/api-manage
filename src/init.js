@@ -50,7 +50,7 @@ export default ({
                 Reflect.defineProperty(apiFun, 'name', { value: funName });
 
                 Object.setPrototypeOf(apiFun, {
-                    resolve: function resolve(data, tplData) {
+                    resolve: function resolve(data = {}, tplData) {
                         const splitPath = URI(template(requestPath, tplData));
 
                         const dealURI = method === 'get' ? splitPath.addQuery(data) : splitPath;
