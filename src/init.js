@@ -28,7 +28,10 @@ export default ({
                     if (typeof customize[method] === "function")
                         apiFun = customize[method].bind(requestPath);
                 } else if (request[method]) {
-                    apiFun = function(params, { tplData = {}, ...config }) {
+                    apiFun = function(
+                        params,
+                        { tplData = {}, ...config } = {}
+                    ) {
                         return new Promise((resolve, reject) => {
                             request({
                                 ...config,
@@ -55,7 +58,7 @@ export default ({
                 Reflect.defineProperty(apiFun, "name", { value: funName });
 
                 Object.setPrototypeOf(apiFun, {
-                    resolve: function resolve(data = {}, tplData) {
+                    resolve: function resolve(data = {}, tplData = {}) {
                         const splitPath = URI(template(requestPath, tplData));
 
                         const dealURI =
