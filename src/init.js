@@ -1,14 +1,14 @@
-import URI from 'urijs';
-import apiManage from './store';
-import template from './template';
+import URI from "urijs";
+import apiManage from "./store";
+import template from "./template";
 
 export default ({
-    request = require('axios').default,
+    request = require("axios").default,
     list,
-    matchStr = 'api',
-    replaceStr = 'serve',
+    matchStr = "api",
+    replaceStr = "serve",
     validate = () => true,
-    customize = {},
+    customize = {}
 }) => {
     const filterArr = [];
     const serviceList = Object.entries(list).reduce(
@@ -17,27 +17,32 @@ export default ({
             ...Object.entries(apis).reduce((r2, [name, requestPath]) => {
                 let apiFun = () => null;
 
-                const funName = name.replace(RegExp('^' + matchStr), replaceStr);
+                const funName = name.replace(
+                    RegExp("^" + matchStr),
+                    replaceStr
+                );
 
                 //是否有自定义
                 if (customize[method]) {
                     // 自定义必须为函数
-                    if (typeof customize[method] === 'function') apiFun = customize[method].bind(requestPath);
+                    if (typeof customize[method] === "function")
+                        apiFun = customize[method].bind(requestPath);
                 } else if (request[method]) {
-                    apiFun = function(params, tplData) {
+                    apiFun = function(params, { tplData = {}, ...config }) {
                         return new Promise((resolve, reject) => {
                             request({
+                                ...config,
                                 method,
                                 url: template(requestPath, tplData),
-                                [method === 'get' ? 'params' : 'data']: params,
+                                [method === "get" ? "params" : "data"]: params
                             })
                                 .then(res => {
                                     if (validate(res)) {
                                         resolve(res);
                                     } else {
                                         reject({
-                                            error: 'api-manage validate false',
-                                            response: res,
+                                            error: "api-manage validate false",
+                                            response: res
                                         });
                                     }
                                 })
@@ -47,20 +52,29 @@ export default ({
                 }
 
                 // 设置请求函数名称
-                Reflect.defineProperty(apiFun, 'name', { value: funName });
+                Reflect.defineProperty(apiFun, "name", { value: funName });
 
                 Object.setPrototypeOf(apiFun, {
                     resolve: function resolve(data = {}, tplData) {
                         const splitPath = URI(template(requestPath, tplData));
 
-                        const dealURI = method === 'get' ? splitPath.addQuery(data) : splitPath;
+                        const dealURI =
+                            method === "get"
+                                ? splitPath.addQuery(data)
+                                : splitPath;
 
-                        const { hostname, path, port, protocol, query } = dealURI._parts;
+                        const {
+                            hostname,
+                            path,
+                            port,
+                            protocol,
+                            query
+                        } = dealURI._parts;
 
                         const fn = apiFun.bind(apiFun, ...arguments);
 
-                        Reflect.defineProperty(fn, 'name', {
-                            value: funName,
+                        Reflect.defineProperty(fn, "name", {
+                            value: funName
                         });
                         return {
                             fn,
@@ -72,12 +86,12 @@ export default ({
                             port,
                             protocol,
                             query,
-                            requestUrl: dealURI.toString(),
+                            requestUrl: dealURI.toString()
                         };
                     },
                     bind: Function.prototype.bind,
                     call: Function.prototype.call,
-                    apply: Function.prototype.apply,
+                    apply: Function.prototype.apply
                 });
 
                 if (!name.startsWith(matchStr)) {
@@ -88,15 +102,18 @@ export default ({
 
                 return {
                     ...r2,
-                    [funName]: apiFun,
+                    [funName]: apiFun
                 };
-            }, {}),
+            }, {})
         }),
-        {},
+        {}
     );
 
     if (filterArr.length) {
-        console.warn(`以下清单api不符合规范，必须包含前缀 "${matchStr}", 已过滤!`, filterArr);
+        console.warn(
+            `以下清单api不符合规范，必须包含前缀 "${matchStr}", 已过滤!`,
+            filterArr
+        );
     }
     apiManage.serviceList = serviceList;
     return serviceList;
