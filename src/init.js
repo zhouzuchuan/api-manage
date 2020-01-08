@@ -40,7 +40,7 @@ export default ({
                                 [method === "get" ? "params" : "data"]: params
                             })
                                 .then(res => {
-                                    if (validate(res)) {
+                                    if (validate(res, funName)) {
                                         resolve(res);
                                     } else {
                                         reject({
