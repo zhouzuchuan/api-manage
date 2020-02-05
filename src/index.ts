@@ -8,6 +8,7 @@ interface Options
     }> {
     list: Record<string, Record<string, string>>;
     request?: any;
+    limitResponse?: (res: any) => any;
     validate?: () => boolean;
     customize?: Record<string, (path?: string, serveName?: string) => any>;
     hooks?: {
@@ -18,7 +19,16 @@ interface Options
     };
 }
 
+const getType = (obj: any) =>
+    Object.prototype.toString
+        .call(obj)
+        .slice(8, -1)
+        .toLowerCase();
+const isFunction = (o: any) => getType(o) === "function";
+const isObject = (o: any) => getType(o) === "object";
+
 const utils: {
+    bindApi: (fns: any[], params: any) => Record<string, any>;
     flatApi: (data: object) => Record<string, string>;
     replaceFnName: (
         apiName: string,
@@ -27,21 +37,19 @@ const utils: {
     ) => string;
     template: (template: any, data: any) => string;
 } = {
-    // bindApi: (data: object): any => {
-    //     Object.entries(data).reduce(
-    //         (r, [key, apis]) => ({
-    //             ...r,
-    //             ...Object.entries(apis).reduce(
-    //                 (r1, [name, path]) => ({
-    //                     ...r1,
-    //                     [name]: `${key} ${path}`,
-    //                 }),
-    //                 {},
-    //             ),
-    //         }),
-    //         {},
-    //     )
-    // },
+    bindApi: (fns, params) => {
+        return (Array.isArray(fns) ? fns : [fns]).reduce((r, v) => {
+            if (!(isFunction(v) || isObject(v))) return r;
+            const result = isFunction(v) ? v(params) : v;
+            if (!isObject(result)) return r;
+            return Object.entries(result).reduce((r2, [n, m]: any) => {
+                return {
+                    ...r2,
+                    ...(isObject(m) && { [n]: { ...(r2[n] || {}), ...m } })
+                };
+            }, r);
+        }, {});
+    },
 
     template: (template, data) => {
         let tmp = 0;
@@ -95,6 +103,7 @@ const defaultOptions = {
 };
 
 class ApiManage {
+    static bindApi = utils.bindApi;
     private serveMap: Record<
         string,
         {
@@ -105,6 +114,7 @@ class ApiManage {
     > = {};
     private hooks: Options["hooks"] = {};
     private methodAction: any = {};
+    private limitResponse: any = (a: any) => a;
     private enumName: Record<string, string> = {};
 
     private cancelList: Record<string, any> = {};
@@ -169,7 +179,7 @@ class ApiManage {
                                 if (resolve) {
                                     resolve(serveName, timestamp);
                                 }
-                                resolvep(res);
+                                resolvep(this.limitResponse(res));
                             } else {
                                 rejectp({
                                     error: "api-manage validate false",
@@ -201,12 +211,14 @@ class ApiManage {
     }
 
     constructor(options: Options) {
-        const { list, matchStr, replaceStr, hooks } = {
+        const { list, matchStr, replaceStr, hooks, limitResponse } = {
             ...defaultOptions,
             ...options
         };
 
         this.validate = options.validate!;
+
+        this.limitResponse = limitResponse;
 
         this.hooks = hooks;
 
