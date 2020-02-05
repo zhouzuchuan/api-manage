@@ -11,10 +11,10 @@ interface Options
     validate?: () => boolean;
     customize?: Record<string, (path?: string, serveName?: string) => any>;
     hooks?: {
-        start?: (serveName?: string) => void;
-        resolve?: (serveName?: string) => void;
-        reject?: (serveName?: string) => void;
-        finally?: (serveName?: string) => void;
+        start?: (serveName?: string, timestamp?: string) => void;
+        resolve?: (serveName?: string, timestamp?: string) => void;
+        reject?: (serveName?: string, timestamp?: string) => void;
+        finally?: (serveName?: string, timestamp?: string) => void;
     };
 }
 
@@ -150,8 +150,10 @@ class ApiManage {
                 } = this.hooks!;
 
                 return new Promise((resolvep, rejectp) => {
+                    // 生成时间戳
+                    const timestamp = `${new Date().getTime()}`;
                     if (start) {
-                        start();
+                        start(serveName, timestamp);
                     }
                     request({
                         ...config,
@@ -165,7 +167,7 @@ class ApiManage {
                                     requestToken
                                 );
                                 if (resolve) {
-                                    resolve();
+                                    resolve(serveName, timestamp);
                                 }
                                 resolvep(res);
                             } else {
@@ -178,7 +180,7 @@ class ApiManage {
                         .catch(rejectp)
                         .finally(() => {
                             if (hooksFinally) {
-                                hooksFinally();
+                                hooksFinally(serveName, timestamp);
                             }
                         });
                 });
