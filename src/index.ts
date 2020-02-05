@@ -9,7 +9,13 @@ interface Options
     list: Record<string, Record<string, string>>;
     request?: any;
     validate?: () => boolean;
-    customize?: Record<string, (path: string, serveName: string) => any>;
+    customize?: Record<string, (path?: string, serveName?: string) => any>;
+    hooks?: {
+        start?: (serveName?: string) => void;
+        resolve?: (serveName?: string) => void;
+        reject?: (serveName?: string) => void;
+        finally?: (serveName?: string) => void;
+    };
 }
 
 const utils: {
@@ -97,6 +103,7 @@ class ApiManage {
             serveFn: any;
         }
     > = {};
+    private hooks: Options["hooks"] = {};
     private methodAction: any = {};
     private enumName: Record<string, string> = {};
 
@@ -135,7 +142,17 @@ class ApiManage {
                     }
                 );
 
-                return new Promise((resolve, reject) => {
+                const {
+                    start,
+                    resolve,
+                    reject,
+                    finally: hooksFinally
+                } = this.hooks!;
+
+                return new Promise((resolvep, rejectp) => {
+                    if (start) {
+                        start();
+                    }
                     request({
                         ...config,
                         ...requestParams
@@ -147,15 +164,23 @@ class ApiManage {
                                     this.cancelList,
                                     requestToken
                                 );
-                                resolve(res);
+                                if (resolve) {
+                                    resolve();
+                                }
+                                resolvep(res);
                             } else {
-                                reject({
+                                rejectp({
                                     error: "api-manage validate false",
                                     response: res
                                 });
                             }
                         })
-                        .catch(reject);
+                        .catch(rejectp)
+                        .finally(() => {
+                            if (hooksFinally) {
+                                hooksFinally();
+                            }
+                        });
                 });
             };
         };
@@ -174,12 +199,14 @@ class ApiManage {
     }
 
     constructor(options: Options) {
-        const { list, matchStr, replaceStr } = {
+        const { list, matchStr, replaceStr, hooks } = {
             ...defaultOptions,
             ...options
         };
 
         this.validate = options.validate!;
+
+        this.hooks = hooks;
 
         this.createMethodService(options.customize, axios);
 

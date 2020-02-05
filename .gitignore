@@ -60,7 +60,7 @@ typings/
 webpack.config.js
 src/.*
 
-lib/*
+lib/
 releaseNotes.md
 .prettierignore
 .editorconfig
