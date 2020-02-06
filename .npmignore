@@ -81,3 +81,5 @@ publish-to-page.sh
 rollup.config.js
 coverage/
 docs/
+tsconfig.json
+yarn.lock

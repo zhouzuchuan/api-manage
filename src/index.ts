@@ -126,7 +126,11 @@ class ApiManage {
         return true;
     }
 
-    private createMethodService(otherCustomizeMethod: any, request: any) {
+    private createMethodService(
+        otherCustomizeMethod: any,
+        request: any,
+        CancelToken: any
+    ) {
         const public2 = (method: string, path: string, serveName: string) => {
             return (params: any, { tplData = {}, ...config }: any = {}) => {
                 const requestParams = {
@@ -138,19 +142,20 @@ class ApiManage {
                 // // 发送请求之前，拦截重复请求(即当前正在进行的相同请求)
                 // let requestToken = getRequestIdentify(requestParams, true)
 
-                let requestToken = this.createCancelToken(requestParams);
+                let requestToken = "";
+                // 如果存在取消请求函数 则 执行以及初始化 取消请求
+                if (CancelToken) {
+                    requestToken = this.createCancelToken(requestParams);
 
-                this.abort(serveName)(requestToken);
-                // removePending(requestData, true)
+                    this.abort(serveName)(requestToken);
 
-                config.cancelToken = new request.CancelToken(
-                    (cancleFn: any) => {
+                    config.cancelToken = new CancelToken((cancleFn: any) => {
                         Reflect.set(this.cancelList, requestToken, [
                             cancleFn,
                             serveName
                         ]);
-                    }
-                );
+                    });
+                }
 
                 const {
                     start,
@@ -171,11 +176,13 @@ class ApiManage {
                     })
                         .then((res: any) => {
                             if (this.validate(res, serveName)) {
-                                // 请求成功 删除取消函数
-                                Reflect.deleteProperty(
-                                    this.cancelList,
-                                    requestToken
-                                );
+                                if (CancelToken) {
+                                    // 请求成功 删除取消函数
+                                    Reflect.deleteProperty(
+                                        this.cancelList,
+                                        requestToken
+                                    );
+                                }
                                 if (resolve) {
                                     resolve(serveName, timestamp);
                                 }
@@ -211,7 +218,15 @@ class ApiManage {
     }
 
     constructor(options: Options) {
-        const { list, matchStr, replaceStr, hooks, limitResponse } = {
+        const {
+            list,
+            matchStr,
+            replaceStr,
+            hooks,
+            limitResponse,
+            request = require("axios").default,
+            cancelToken = require("axios").default.CancelToken
+        } = {
             ...defaultOptions,
             ...options
         };
@@ -222,7 +237,15 @@ class ApiManage {
 
         this.hooks = hooks;
 
-        this.createMethodService(options.customize, axios);
+        let CancelToken: any;
+
+        if (cancelToken) {
+            CancelToken = cancelToken;
+        } else if (request.CancelToken) {
+            CancelToken = request.CancelToken;
+        }
+
+        this.createMethodService(options.customize, request, CancelToken);
 
         const apiList = utils.flatApi(list);
 
@@ -275,22 +298,25 @@ class ApiManage {
                             requestUrl: dealURI.toString()
                         };
                     },
-                    abort: (key: string) => {
-                        if (this.cancelList[key]) {
-                            this.cancelList[key][0]("取消重复请求");
-                        }
-                        Reflect.deleteProperty(this.cancelList, key);
-                    },
 
-                    abort2: (serveName: string) => {
-                        Object.values(this.cancelList).forEach(
-                            ([cancelFn, oldServeName]) => {
-                                if (oldServeName === serveName) {
-                                    cancelFn("取消重复请求");
-                                }
+                    ...(CancelToken && {
+                        abort: (key: string) => {
+                            if (this.cancelList[key]) {
+                                this.cancelList[key][0]("取消重复请求");
                             }
-                        );
-                    },
+                            Reflect.deleteProperty(this.cancelList, key);
+                        },
+
+                        abort2: (serveName: string) => {
+                            Object.values(this.cancelList).forEach(
+                                ([cancelFn, oldServeName]) => {
+                                    if (oldServeName === serveName) {
+                                        cancelFn("取消重复请求");
+                                    }
+                                }
+                            );
+                        }
+                    }),
                     bind: Function.prototype.bind,
                     call: Function.prototype.call,
                     apply: Function.prototype.apply
