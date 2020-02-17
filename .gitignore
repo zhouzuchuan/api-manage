@@ -58,7 +58,7 @@ typings/
 .env
 
 webpack.config.js
-src/.*
+ 
 
 lib/
 releaseNotes.md
