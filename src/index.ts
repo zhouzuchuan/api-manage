@@ -66,7 +66,7 @@ const utils: {
                 let result = v;
                 if (v.startsWith(":")) {
                     let d = dealData[isO ? v.slice(1) : tmp++];
-                    if (d) result = d;
+                    if (typeof d !== "undefined") result = `${d}`;
                 }
                 return result;
             })
