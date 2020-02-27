@@ -1,32 +1,76 @@
 import ApiManage from "../lib";
 
-import apiHome from "./api/home.js";
-
 // const apiFiles = require.context("./api/", true, /\.js$/);
 
-describe("基本使用 -------->", () => {
-    let apiManage;
+const apiList = server => ({
+    get: {
+        apiGetList: `${server}/todos/1`,
+        apiGetList2: `${server}/todos/:id`
+    }
+});
+
+describe("测试 基础 用法 -------->", () => {
+    let requestList = {};
 
     // registerModel(model);
 
-    console.log("sssss");
-
-    apiManage = new ApiManage({
-        list: ApiManage.bindApi({ ...apiHome("") }, { server: "" })
+    const apiManage = new ApiManage({
+        list: ApiManage.bindApi([
+            apiList("https://jsonplaceholder.typicode.com")
+        ]),
+        limitResponse: result => result.data
     });
 
-    console.log(apiManage.getService());
+    requestList = apiManage.getService();
 
-    // it('使用 store，组件渲染成功！', () => {
-    //     expect(wrapper.find('header.header').text()).toEqual(defaultText);
-    // });
-    // it('测试点击，state 是否更改', () => {
-    //     wrapper.find('button.change').simulate('click');
-    //     expect(wrapper.find('header.header').text()).toEqual(packageName);
-    // });
+    it("获取 所有的请求函数", () => {
+        expect(Object.keys(requestList).includes("serveGetList")).toEqual(true);
+    });
 
-    // it('同一model中， action type 省略 namespace', () => {
-    //     wrapper.find('button.forwardAction').simulate('click');
-    //     expect(wrapper.find('header.header').text()).toEqual(authorName);
-    // });
+    it("测试 请求 成功！", () => {
+        return requestList.serveGetList().then(data => {
+            expect(data).toEqual({
+                userId: 1,
+                id: 1,
+                title: "delectus aut autem",
+                completed: false
+            });
+        });
+    });
+
+    it("测试 请求 中断！", () => {
+        let temp = false;
+        requestList.serveGetList2({}, { tplData: { id: 2 } }).catch(a => {
+            expect(a).toEqual({ message: "取消重复请求" });
+            temp = true;
+        });
+
+        requestList.serveGetList2({}, { tplData: { id: 3 } }).catch(a => {
+            expect(a).toEqual({ message: "取消重复请求" });
+        });
+        apiManage.abort("serveGetList2");
+
+        return requestList
+            .serveGetList2({}, { tplData: { id: 2 } })
+            .then(data => {
+                expect(data).toEqual({
+                    userId: 1,
+                    id: 2,
+                    title: "quis ut nam facilis et officia qui",
+                    completed: false
+                });
+
+                expect(temp).toEqual(true);
+            });
+    });
+
+    it("测试 请求函数 路径解析", () => {
+        expect(
+            requestList.serveGetList2.resolve({}, { id: 100 }).requestUrl
+        ).toEqual("https://jsonplaceholder.typicode.com/todos/100");
+
+        expect(
+            apiManage.resolve("serveGetList2")({}, { id: 222 }).requestUrl
+        ).toEqual("https://jsonplaceholder.typicode.com/todos/222");
+    });
 });

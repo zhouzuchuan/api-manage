@@ -1,4 +1,3 @@
-import axios from "axios";
 import URI from "urijs";
 
 interface Options
@@ -9,8 +8,9 @@ interface Options
     list: Record<string, Record<string, string>>;
     request?: any;
     limitResponse?: (res: any) => any;
-    validate?: () => boolean;
+    validate?: (response?: any, serveName?: string) => boolean;
     customize?: Record<string, (path?: string, serveName?: string) => any>;
+    CancelToken?: () => any;
     hooks?: {
         start?: (serveName?: string, timestamp?: string) => void;
         resolve?: (serveName?: string, timestamp?: string) => void;
@@ -18,6 +18,36 @@ interface Options
         finally?: (serveName?: string, timestamp?: string) => void;
     };
 }
+
+type TServeFn = (
+    data?: any,
+    options?: {
+        tplData?: any;
+        cancelParams?: {
+            isCalcFullPath?: boolean;
+        };
+    } & { [p in string]: any }
+) => Promise<any>;
+
+type TResolveFn = (
+    data?:
+        | {
+              [p in string]: any;
+          }
+        | any[],
+    tplData?: { [p in string]: string | number }
+) => null | {
+    url: string;
+    name: string;
+    method: string;
+    hostname: string;
+    port: string;
+    protocol: string;
+    query: string;
+    requestUrl: string;
+};
+
+type TAbortFn = (key?: string) => void;
 
 const getType = (obj: any) =>
     Object.prototype.toString
@@ -27,31 +57,69 @@ const getType = (obj: any) =>
 const isFunction = (o: any) => getType(o) === "function";
 const isObject = (o: any) => getType(o) === "object";
 
-const utils: {
-    bindApi: (fns: any[], params: any) => Record<string, any>;
-    flatApi: (data: object) => Record<string, string>;
-    replaceFnName: (
-        apiName: string,
-        matchStr: string,
-        replaceStr: string
-    ) => string;
-    template: (template: any, data: any) => string;
-} = {
-    bindApi: (fns, params) => {
-        return (Array.isArray(fns) ? fns : [fns]).reduce((r, v) => {
+class ApiManage {
+    /**
+     * 将多个api清单文件 合并成一个
+     *
+     * @param {any[]} fns api清单集合
+     * @param {*} params api如果是函数 则为参数传入该函数中
+     * @returns {Record<string, Record<string, string>>}
+     */
+    static bindApi = (
+        fns: any[],
+        params?: any
+    ): Record<string, Record<string, string>> =>
+        (Array.isArray(fns) ? fns : [fns]).reduce((r, v) => {
+            // 如果不是函数以及键值对 则过滤
             if (!(isFunction(v) || isObject(v))) return r;
+            // 如果是函数 则执行并将params传入参数
             const result = isFunction(v) ? v(params) : v;
+
+            // 如果返回的不是对象键值对 则过滤
             if (!isObject(result)) return r;
-            return Object.entries(result).reduce((r2, [n, m]: any) => {
-                return {
+
+            return Object.entries(result).reduce(
+                (r2, [n, m]: any) => ({
                     ...r2,
                     ...(isObject(m) && { [n]: { ...(r2[n] || {}), ...m } })
-                };
-            }, r);
+                }),
+                r
+            );
         }, {});
-    },
 
-    template: (template, data) => {
+    /**
+     * 计算中断函数唯一token
+     *
+     * @param {*} requestParams 请求参数
+     * @param {boolean} [isCalcFullPath=true]  是否计算全路径（只要用来区别相同请求地址，不同参数间是否进行取消操作）
+     * @returns
+     */
+    static createCancelToken = (
+        requestParams: {
+            method: string;
+            url: string;
+            params?: { [a: string]: any };
+            data?: { [a: string]: any };
+        } & { [a: string]: any },
+        isCalcFullPath: boolean = true
+    ): string => {
+        let { method, url, params = {}, data = {} } = requestParams;
+
+        return isCalcFullPath
+            ? encodeURIComponent(
+                  url + JSON.stringify(method === "get" ? { params } : { data })
+              )
+            : url;
+    };
+
+    /**
+     * 路径模板 根据 `:` 来匹配
+     *
+     * @param {*} template
+     * @param {*} [data=[]]
+     * @returns {string}
+     */
+    static template = (template: any, data: any = []): string => {
         let tmp = 0;
         const isA = Array.isArray(data);
         const isO =
@@ -71,10 +139,20 @@ const utils: {
                 return result;
             })
             .join("/");
-    },
+    };
 
-    flatApi: data => {
-        return Object.entries(data).reduce(
+    /**
+     * 将api清单数据 拍平 成键值对映射（api名称 对应 其路径以及方法类型）
+     *
+     * @param {object} data
+     * @returns {Record<string, { path: string; method: string }>}
+     *
+     *
+     */
+    static flatApi = (
+        data: object
+    ): Record<string, { path: string; method: string }> =>
+        Object.entries(data).reduce(
             (result: any, [method, items]: any) => ({
                 ...result,
                 ...Object.entries(items).reduce(
@@ -90,20 +168,26 @@ const utils: {
             }),
             {}
         );
-    },
 
-    replaceFnName: (apiName, matchStr, replaceStr) => {
-        return apiName.replace(RegExp("^" + matchStr), replaceStr);
-    }
-};
+    /**
+     * 替换字符串开头的字符串
+     *
+     * @param {*} apiName 需要替换的字符串
+     * @param {*} matchStr 被替换的字符
+     * @param {*} replaceStr 替换成的字符
+     */
+    static replaceFnName = (
+        apiName: string,
+        matchStr: string,
+        replaceStr: string
+    ): string =>
+        matchStr
+            ? apiName.replace(RegExp("^" + matchStr), replaceStr)
+            : apiName;
 
-const defaultOptions = {
-    matchStr: "api",
-    replaceStr: "serve"
-};
-
-class ApiManage {
-    static bindApi = utils.bindApi;
+    /**
+     *  serveFn 列表
+     * */
     private serveMap: Record<
         string,
         {
@@ -112,168 +196,174 @@ class ApiManage {
             serveFn: any;
         }
     > = {};
-    private hooks: Options["hooks"] = {};
-    private methodAction: any = {};
-    private limitResponse: any = (a: any) => a;
-    private enumName: Record<string, string> = {};
 
+    /**
+     *  中断函数 列表
+     */
     private cancelList: Record<string, any> = {};
 
-    // 索引 请求函数名与其生成的请求token组 映射
-    // private serveCancelTokenMap: Record<string, string[]> = {}
+    constructor(options: Options) {
+        const defaultRequest = require("axios").default;
+        const {
+            list,
+            matchStr = "api",
+            replaceStr = "serve",
+            hooks = {},
+            limitResponse = (a: any) => a,
+            request = defaultRequest,
+            CancelToken = defaultRequest.CancelToken,
+            customize = {},
+            validate = () => true
+        } = options;
 
-    private validate(response: any, serveName: string): boolean {
-        return true;
-    }
+        const {
+            start: hooksStart,
+            resolve: hooksResolve,
+            reject: hooksReject,
+            finally: hooksFinally
+        } = hooks!;
 
-    private createMethodService(
-        otherCustomizeMethod: any,
-        request: any,
-        CancelToken: any
-    ) {
-        const public2 = (method: string, path: string, serveName: string) => {
-            return (params: any, { tplData = {}, ...config }: any = {}) => {
-                const requestParams = {
-                    method,
-                    url: utils.template(path, tplData),
-                    [method === "get" ? "params" : "data"]: params
-                };
+        // 中断构造函数
+        let CancelTokenFn: any;
 
-                // // 发送请求之前，拦截重复请求(即当前正在进行的相同请求)
-                // let requestToken = getRequestIdentify(requestParams, true)
+        if (CancelToken) {
+            CancelTokenFn = CancelToken;
+        } else if (request.CancelToken) {
+            CancelTokenFn = request.CancelToken;
+        }
 
-                let requestToken = "";
-                // 如果存在取消请求函数 则 执行以及初始化 取消请求
-                if (CancelToken) {
-                    requestToken = this.createCancelToken(requestParams);
+        const methodAction = {
+            ...(["get", "post", "delete", "put"] as string[])
+                .filter(type => typeof request[type] === "function")
+                .reduce(
+                    (r, method) => ({
+                        ...r,
+                        [method]: (path: string, serveName: string) => (
+                            params: any,
+                            {
+                                tplData = {},
+                                cancelParams = {},
+                                ...config
+                            }: any = {}
+                        ) => {
+                            const { isCalcFullPath = true } = cancelParams;
 
-                    this.abort(serveName)(requestToken);
+                            const requestParams = {
+                                method,
+                                url: ApiManage.template(path, tplData),
+                                [method === "get" ? "params" : "data"]: params
+                            };
 
-                    config.cancelToken = new CancelToken((cancleFn: any) => {
-                        Reflect.set(this.cancelList, requestToken, [
-                            cancleFn,
-                            serveName
-                        ]);
-                    });
-                }
+                            let requestToken = "";
+                            // 如果存在取消请求函数 则 执行以及初始化 取消请求
+                            if (CancelTokenFn) {
+                                requestToken = ApiManage.createCancelToken(
+                                    requestParams,
+                                    isCalcFullPath
+                                );
 
-                const {
-                    start,
-                    resolve,
-                    reject,
-                    finally: hooksFinally
-                } = this.hooks!;
-
-                return new Promise((resolvep, rejectp) => {
-                    // 生成时间戳
-                    const timestamp = `${new Date().getTime()}`;
-                    if (start) {
-                        start(serveName, timestamp);
-                    }
-                    request({
-                        ...config,
-                        ...requestParams
-                    })
-                        .then((res: any) => {
-                            if (this.validate(res, serveName)) {
-                                if (CancelToken) {
-                                    // 请求成功 删除取消函数
+                                // 中断 同一个 token
+                                if (this.cancelList[requestToken]) {
+                                    this.cancelList[requestToken][0](
+                                        "取消重复请求"
+                                    );
                                     Reflect.deleteProperty(
                                         this.cancelList,
                                         requestToken
                                     );
                                 }
-                                if (resolve) {
-                                    resolve(serveName, timestamp);
+
+                                config.cancelToken = new CancelTokenFn(
+                                    (cancleFn: any) => {
+                                        Reflect.set(
+                                            this.cancelList,
+                                            requestToken,
+                                            [cancleFn, serveName]
+                                        );
+                                    }
+                                );
+                            }
+
+                            return new Promise((resolve, reject) => {
+                                // 生成时间戳
+                                const timestamp = `${new Date().getTime()}`;
+                                if (hooksStart) {
+                                    hooksStart(serveName, timestamp);
                                 }
-                                resolvep(this.limitResponse(res));
-                            } else {
-                                rejectp({
-                                    error: "api-manage validate false",
-                                    response: res
-                                });
-                            }
-                        })
-                        .catch(rejectp)
-                        .finally(() => {
-                            if (hooksFinally) {
-                                hooksFinally(serveName, timestamp);
-                            }
-                        });
-                });
-            };
+                                request({
+                                    ...config,
+                                    ...requestParams
+                                })
+                                    .then((res: any) => {
+                                        if (validate(res, serveName)) {
+                                            // 如果存在 取消函数 则取消该函数记录
+                                            if (!!requestToken) {
+                                                // 请求成功 删除取消函数
+                                                Reflect.deleteProperty(
+                                                    this.cancelList,
+                                                    requestToken
+                                                );
+                                            }
+                                            if (hooksResolve) {
+                                                hooksResolve(
+                                                    serveName,
+                                                    timestamp
+                                                );
+                                            }
+                                            resolve(limitResponse(res));
+                                        } else {
+                                            reject({
+                                                error:
+                                                    "api-manage validate false",
+                                                response: res
+                                            });
+                                        }
+                                    })
+                                    .catch(reject)
+                                    .finally(() => {
+                                        if (hooksFinally) {
+                                            hooksFinally(serveName, timestamp);
+                                        }
+                                    });
+                            }).catch(hooksReject);
+                        }
+                    }),
+                    {}
+                ),
+            ...(customize as any)
         };
 
-        this.methodAction = (["get", "post", "delete", "put"] as string[])
-            .filter(type => typeof request[type] === "function")
-            .reduce(
-                (r, type) => ({
-                    ...r,
-                    [type]: public2.bind(this, type)
-                }),
-                {
-                    ...otherCustomizeMethod
-                }
-            );
-    }
-
-    constructor(options: Options) {
-        const {
-            list,
-            matchStr,
-            replaceStr,
-            hooks,
-            limitResponse,
-            request = require("axios").default,
-            cancelToken = require("axios").default.CancelToken
-        } = {
-            ...defaultOptions,
-            ...options
-        };
-
-        this.validate = options.validate!;
-
-        this.limitResponse = limitResponse;
-
-        this.hooks = hooks;
-
-        let CancelToken: any;
-
-        if (cancelToken) {
-            CancelToken = cancelToken;
-        } else if (request.CancelToken) {
-            CancelToken = request.CancelToken;
-        }
-
-        this.createMethodService(options.customize, request, CancelToken);
-
-        const apiList = utils.flatApi(list);
+        const apiList = ApiManage.flatApi(list);
 
         this.serveMap = Object.entries(apiList).reduce(
             (result: any, [apiName, { path, method }]: [string, any]) => {
-                if (typeof this.methodAction[method] !== "function") {
+                if (typeof methodAction[method] !== "function") {
                     return result;
                 }
 
-                const serveName: string = utils.replaceFnName(
+                const serveName: string = ApiManage.replaceFnName(
                     apiName,
                     matchStr,
                     replaceStr
                 );
 
-                Reflect.set(this.enumName, apiName, serveName);
-                Reflect.set(this.enumName, serveName, apiName);
-
-                const serveFn = this.methodAction[method](path, serveName);
+                const serveFn = methodAction[method](path, serveName);
 
                 // 设置请求函数名称
                 Reflect.defineProperty(serveFn, "name", {
                     value: serveName
                 });
 
-                Object.setPrototypeOf(serveFn, {
+                const serveFnOptions: {
+                    resolve: TResolveFn;
+                    abort?: TAbortFn;
+                } & {
+                    [a in string]: any;
+                } = {
                     resolve: (data = {}, tplData = {}) => {
-                        const splitPath = URI(utils.template(path, tplData));
+                        const splitPath = URI(
+                            ApiManage.template(path, tplData)
+                        );
 
                         const dealURI: any =
                             method === "get"
@@ -299,28 +389,31 @@ class ApiManage {
                         };
                     },
 
-                    ...(CancelToken && {
-                        abort: (key: string) => {
-                            if (this.cancelList[key]) {
-                                this.cancelList[key][0]("取消重复请求");
-                            }
-                            Reflect.deleteProperty(this.cancelList, key);
-                        },
-
-                        abort2: (serveName: string) => {
-                            Object.values(this.cancelList).forEach(
-                                ([cancelFn, oldServeName]) => {
+                    ...(CancelTokenFn && {
+                        // 中断请求（通过serveName 来匹配, 会中断多个参数不同但serveFn相同的函数）
+                        abort: () => {
+                            Object.entries(this.cancelList).forEach(
+                                ([cancelToken, [cancelFn, oldServeName]]) => {
                                     if (oldServeName === serveName) {
                                         cancelFn("取消重复请求");
+
+                                        Reflect.deleteProperty(
+                                            this.cancelList,
+                                            cancelToken
+                                        );
                                     }
                                 }
                             );
                         }
                     }),
+
                     bind: Function.prototype.bind,
                     call: Function.prototype.call,
                     apply: Function.prototype.apply
-                });
+                };
+
+                // 设置原型
+                Object.setPrototypeOf(serveFn, serveFnOptions);
 
                 return {
                     ...result,
@@ -335,23 +428,41 @@ class ApiManage {
         );
     }
 
-    resolve(serveName: string) {
+    /**
+     * 解析请求地址
+     *
+     * @param {string} serveName 指定的请求名称
+     * @returns {TResolveFn}
+     * @memberof ApiManage
+     */
+    public resolve(serveName: string): TResolveFn {
         const { serveFn } = this.serveMap[serveName];
         if (serveFn) {
             return serveFn.resolve;
         }
         return () => null;
     }
-
-    abort(serveName: string) {
+    /**
+     * 中断骑牛
+     *
+     * @param {string} serveName 指定的请求名称
+     * @returns {void}
+     * @memberof ApiManage
+     */
+    public abort(serveName: string): void {
         const { serveFn } = this.serveMap[serveName];
         if (serveFn) {
-            return serveFn.abort;
+            return serveFn.abort();
         }
-        return () => null;
     }
 
-    getService(): Record<string, any> {
+    /**
+     * 获取所有 api 请求函数
+     *
+     * @returns {Record<string, any>}
+     * @memberof ApiManage
+     */
+    public getService(): Record<string, TServeFn> {
         return Object.entries(this.serveMap).reduce(
             (r, [k, items]) => ({
                 ...r,
@@ -360,27 +471,6 @@ class ApiManage {
             {}
         );
     }
-
-    createCancelToken(config: any) {
-        const requestParams = config;
-
-        // 发送请求之前，拦截重复请求(即当前正在进行的相同请求)
-        return getRequestIdentify(requestParams, true);
-    }
 }
-
-/**
- * config: 请求数据
- * isReuest: 请求拦截器中 config.url = '/users', 响应拦截器中 config.url = 'http://localhost:3000/users'，所以加上一个标识来计算请求的全路径
- */
-const getRequestIdentify = (config: any, isReuest: boolean = false) => {
-    let url = config.url;
-    // if (isReuest) {
-    //     url = config.baseURL + config.url.substring(1, config.url.length)
-    // }
-    return config.method === "get"
-        ? encodeURIComponent(url + JSON.stringify(config.params))
-        : encodeURIComponent(config.url + JSON.stringify(config.data));
-};
 
 export default ApiManage;
