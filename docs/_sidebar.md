@@ -7,5 +7,6 @@
 -   [常见问题](/deep/question.md)
 
 -   **案列**
--   [vue](/demo/vue.md)
+-   [Vue](/demo/vue.md)
+-   [React](/demo/react.md)
 -   [小程序](/demo/applets.md)

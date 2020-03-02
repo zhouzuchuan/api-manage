@@ -20,6 +20,8 @@ import apiList from "./api";
 Vue.prototype.$service = new apiManage({
     list: ApiManage.bindApi([apiList], { server: "/api" })
 });
+
+// ...
 ```
 
 ```js

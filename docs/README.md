@@ -24,7 +24,7 @@ yarn add api-manage
 
 ## 核心
 
-### 约定
+### 1、约定
 
 在 API 清单中的定义的 api 名，如 `apiGetToken`，在经过 api-manage 注入后的服务名则为`serveGetToken`。及将`api`替换成`serve`。
 
@@ -32,7 +32,11 @@ yarn add api-manage
 
 可以通过参数来自定义规则，[点击这里](/api?id=matchstr)
 
-### API 清单
+### 2、自动中断重复请求
+
+这个还是基于 `axios` 来实现，只在浏览器层面上中断了请求，服务器端重复请求是依然存在的
+
+### 3、API 清单
 
 是用来管理应用程序的请求 api 地址，统一管理 既方便使用也方便修改和查找
 
