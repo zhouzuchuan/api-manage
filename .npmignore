@@ -82,4 +82,4 @@ rollup.config.js
 coverage/
 docs/
 tsconfig.json
-yarn.lock
+yarn.lock 

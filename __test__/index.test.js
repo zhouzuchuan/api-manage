@@ -2,11 +2,11 @@ import ApiManage from "../lib";
 
 // const apiFiles = require.context("./api/", true, /\.js$/);
 
-const apiList = server => ({
+const apiList = (server) => ({
     get: {
         apiGetList: `${server}/todos/1`,
-        apiGetList2: `${server}/todos/:id`
-    }
+        apiGetList2: `${server}/todos/:id`,
+    },
 });
 
 describe("测试 基础 用法 -------->", () => {
@@ -16,9 +16,9 @@ describe("测试 基础 用法 -------->", () => {
 
     const apiManage = new ApiManage({
         list: ApiManage.bindApi([
-            apiList("https://jsonplaceholder.typicode.com")
+            apiList("https://jsonplaceholder.typicode.com"),
         ]),
-        limitResponse: result => result.data
+        limitResponse: (result) => result.data,
     });
 
     requestList = apiManage.getService();
@@ -28,36 +28,41 @@ describe("测试 基础 用法 -------->", () => {
     });
 
     it("测试 请求 成功！", () => {
-        return requestList.serveGetList().then(data => {
-            expect(data).toEqual({
-                userId: 1,
-                id: 1,
-                title: "delectus aut autem",
-                completed: false
+        return requestList
+            .serveGetList()
+            .then((data) => {
+                expect(data).toEqual({
+                    userId: 1,
+                    id: 1,
+                    title: "delectus aut autem",
+                    completed: false,
+                });
+            })
+            .catch(() => {
+                console.log("请求失效！");
             });
-        });
     });
 
     it("测试 请求 中断！", () => {
         let temp = false;
-        requestList.serveGetList2({}, { tplData: { id: 2 } }).catch(a => {
+        requestList.serveGetList2({}, { tplData: { id: 2 } }).catch((a) => {
             expect(a).toEqual({ message: "取消重复请求" });
             temp = true;
         });
 
-        requestList.serveGetList2({}, { tplData: { id: 3 } }).catch(a => {
+        requestList.serveGetList2({}, { tplData: { id: 3 } }).catch((a) => {
             expect(a).toEqual({ message: "取消重复请求" });
         });
         apiManage.abort("serveGetList2");
 
         return requestList
             .serveGetList2({}, { tplData: { id: 2 } })
-            .then(data => {
+            .then((data) => {
                 expect(data).toEqual({
                     userId: 1,
                     id: 2,
                     title: "quis ut nam facilis et officia qui",
-                    completed: false
+                    completed: false,
                 });
 
                 expect(temp).toEqual(true);

@@ -38,6 +38,7 @@
         "@babel/preset-typescript": "^7.8.3",
         "@types/node": "^13.7.0",
         "@types/urijs": "^1.19.5",
+        "axios": "^0.18.0",
         "babel-jest": "^25.1.0",
         "babel-loader": "^8.0.6",
         "babel-plugin-add-module-exports": "^1.0.2",
@@ -46,8 +47,5 @@
         "sinon": "^8.1.1",
         "typescript": "^3.7.5"
     },
-    "dependencies": {
-        "axios": "^0.18.0",
-        "urijs": "^1.19.2"
-    }
+    "dependencies": {}
 }
