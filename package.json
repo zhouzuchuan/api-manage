@@ -10,8 +10,9 @@
         "build:types": "tsc --emitDeclarationOnly",
         "build:js": "babel src --out-dir lib --extensions \".ts\"",
         "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s -r 0",
-        "test": "jest",
-        "patch": "npm version patch"
+        "test": "npm run build && jest",
+        "patch": "npm version patch",
+        "prepublish": "npm run test"
     },
     "repository": {
         "type": "git",

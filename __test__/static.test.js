@@ -1,64 +1,65 @@
 import ApiManage from "../lib";
+import axios from "axios";
 
 describe("测试 static bindApi -------->", () => {
     const apiIndex = {
         get: {
-            apiIndex_GetList: `/index/1`
+            apiIndex_GetList: `/index/1`,
         },
         post: {
-            apiIndex_queryList: `/index/2`
-        }
+            apiIndex_queryList: `/index/2`,
+        },
     };
 
-    const apiIndex2 = server => ({
+    const apiIndex2 = (server) => ({
         get: {
-            apiIndex_GetList2: `${server}/index/1`
+            apiIndex_GetList2: `${server}/index/1`,
         },
         post: {
-            apiIndex_queryList2: `${server}/index/2`
-        }
+            apiIndex_queryList2: `${server}/index/2`,
+        },
     });
 
     const apiHome = {
         get: {
-            apiHome_GetList: `/home/1`
+            apiHome_GetList: `/home/1`,
         },
         post: {
             apiHome_queryList: `/home/2`,
-            apiHome_queryData: `/home/3`
-        }
+            apiHome_queryData: `/home/3`,
+        },
     };
 
-    const apiHome2 = server => ({
+    const apiHome2 = (server) => ({
         get: {
-            apiHome_GetList2: `${server}/home/1`
+            apiHome_GetList2: `${server}/home/1`,
         },
         post: {
             apiHome_queryList2: `${server}/home/2`,
-            apiHome_queryData2: `${server}/home/3`
-        }
+            apiHome_queryData2: `${server}/home/3`,
+        },
     });
 
     it("api清单 单个（函数）", () => {
         expect(ApiManage.bindApi(apiIndex2("/api"))).toEqual({
             get: {
-                apiIndex_GetList2: `/api/index/1`
+                apiIndex_GetList2: `/api/index/1`,
             },
             post: {
-                apiIndex_queryList2: `/api/index/2`
-            }
+                apiIndex_queryList2: `/api/index/2`,
+            },
         });
     });
 
     it("api清单 单个（对象）", () => {
         expect(ApiManage.bindApi(apiHome)).toEqual({
             get: {
-                apiHome_GetList: `/home/1`
+                apiHome_GetList: `/home/1`,
             },
             post: {
                 apiHome_queryList: `/home/2`,
-                apiHome_queryData: `/home/3`
-            }
+                apiHome_queryData: `/home/3`,
+            },
         });
     });
 
@@ -66,13 +67,13 @@ describe("测试 static bindApi -------->", () => {
         expect(ApiManage.bindApi([apiHome2(""), apiIndex2("/api")])).toEqual({
             get: {
                 apiIndex_GetList2: `/api/index/1`,
-                apiHome_GetList2: `/home/1`
+                apiHome_GetList2: `/home/1`,
             },
             post: {
                 apiIndex_queryList2: `/api/index/2`,
                 apiHome_queryList2: `/home/2`,
-                apiHome_queryData2: `/home/3`
-            }
+                apiHome_queryData2: `/home/3`,
+            },
         });
     });
 
@@ -80,13 +81,13 @@ describe("测试 static bindApi -------->", () => {
         expect(ApiManage.bindApi([apiHome, apiIndex])).toEqual({
             get: {
                 apiIndex_GetList: `/index/1`,
-                apiHome_GetList: `/home/1`
+                apiHome_GetList: `/home/1`,
             },
             post: {
                 apiIndex_queryList: `/index/2`,
                 apiHome_queryList: `/home/2`,
-                apiHome_queryData: `/home/3`
-            }
+                apiHome_queryData: `/home/3`,
+            },
         });
     });
 
@@ -94,13 +95,13 @@ describe("测试 static bindApi -------->", () => {
         expect(ApiManage.bindApi([apiHome, apiIndex2("/api")])).toEqual({
             get: {
                 apiIndex_GetList2: `/api/index/1`,
-                apiHome_GetList: `/home/1`
+                apiHome_GetList: `/home/1`,
             },
             post: {
                 apiIndex_queryList2: `/api/index/2`,
                 apiHome_queryList: `/home/2`,
-                apiHome_queryData: `/home/3`
-            }
+                apiHome_queryData: `/home/3`,
+            },
         });
     });
 });
@@ -109,37 +110,37 @@ describe("测试 static flatApi -------->", () => {
     const apiList = {
         get: {
             apiIndex_GetList: `/index/1`,
-            apiHome_GetList: `/home/1`
+            apiHome_GetList: `/home/1`,
         },
         post: {
             apiIndex_queryList: `/index/2`,
             apiHome_queryList: `/home/2`,
-            apiHome_queryData: `/home/3`
-        }
+            apiHome_queryData: `/home/3`,
+        },
     };
 
     it("数据重组", () => {
         expect(ApiManage.flatApi(apiList)).toEqual({
             apiIndex_GetList: {
                 path: "/index/1",
-                method: "get"
+                method: "get",
             },
             apiHome_GetList: {
                 path: "/home/1",
-                method: "get"
+                method: "get",
             },
             apiIndex_queryList: {
                 path: "/index/2",
-                method: "post"
+                method: "post",
             },
             apiHome_queryList: {
                 path: "/home/2",
-                method: "post"
+                method: "post",
             },
             apiHome_queryData: {
                 path: "/home/3",
-                method: "post"
-            }
+                method: "post",
+            },
         });
     });
 });
@@ -192,11 +193,11 @@ describe("测试 static createCancelToken -------->", () => {
         url: "/api/a/b",
         method: "get",
         data: {
-            a: 1
+            a: 1,
         },
         params: {
-            b: 1
-        }
+            b: 1,
+        },
     };
 
     it("全路径计算", () => {
@@ -206,12 +207,14 @@ describe("测试 static createCancelToken -------->", () => {
         expect(
             ApiManage.createCancelToken({
                 ...options,
-                method: "post"
+                method: "post",
             })
         ).toEqual("%2Fapi%2Fa%2Fb%7B%22data%22%3A%7B%22a%22%3A1%7D%7D");
     });
 
     it("非全路径计算", () => {
-        expect(ApiManage.createCancelToken(options, false)).toEqual("/api/a/b");
+        expect(ApiManage.createCancelToken(options, false)).toEqual(
+            "%2Fapi%2Fa%2Fb%7B%22params%22%3A%7B%22b%22%3A1%7D%7D"
+        );
     });
 });

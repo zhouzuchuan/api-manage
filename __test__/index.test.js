@@ -1,4 +1,5 @@
 import ApiManage from "../lib";
+import axios from "axios";
 
 // const apiFiles = require.context("./api/", true, /\.js$/);
 
@@ -15,9 +16,11 @@ describe("测试 基础 用法 -------->", () => {
     // registerModel(model);
 
     const apiManage = new ApiManage({
+        request: axios,
         list: ApiManage.bindApi([
             apiList("https://jsonplaceholder.typicode.com"),
         ]),
+        CancelRequest: axios.CancelToken,
         limitResponse: (result) => result.data,
     });
 
@@ -77,5 +80,33 @@ describe("测试 基础 用法 -------->", () => {
         expect(
             apiManage.resolve("serveGetList2")({}, { id: 222 }).requestUrl
         ).toEqual("https://jsonplaceholder.typicode.com/todos/222");
+    });
+});
+
+describe("测试 实例方法 mergeQuery -------->", () => {
+    const apiManage = new ApiManage({
+        request: axios,
+        list: {},
+    });
+
+    it("常规", () => {
+        expect(apiManage.mergeQuery("?a=1")).toEqual("a=1");
+        expect(apiManage.mergeQuery("a=1")).toEqual("a=1");
+        expect(apiManage.mergeQuery("?a=1", { b: 1 })).toEqual("a=1&b=1");
+        expect(apiManage.mergeQuery("a=1", { b: 1 })).toEqual("a=1&b=1");
+        expect(apiManage.mergeQuery("?a=1", { b: 1, c: undefined })).toEqual(
+            "a=1&b=1&c="
+        );
+        expect(apiManage.mergeQuery("?a=1&d", { b: 1, c: undefined })).toEqual(
+            "a=1&d&b=1&c="
+        );
+    });
+    it("特殊", () => {
+        expect(apiManage.mergeQuery("   ", { a: 1 })).toEqual("a=1");
+        expect(apiManage.mergeQuery("a", { b: 1 })).toEqual("a&b=1");
+        expect(apiManage.mergeQuery("    a", { b: 1 })).toEqual("a&b=1");
+        expect(apiManage.mergeQuery("    a&  b=1", { c: 1 })).toEqual(
+            "a&  b=1&c=1"
+        );
     });
 });
