@@ -19,7 +19,7 @@ export interface ApiManageOptions
         string,
         (path?: string, serveName?: string) => ServeFunction
     >;
-    /** 请求构造函数 */
+    /** 取消请求构造函数 */
     CancelRequest?: new (fn: (cancelFn: () => void) => void) => void;
 
     /** 钩子函数 */
@@ -37,26 +37,25 @@ export interface ApiManageOptions
     defaultMethodNames?: string[];
 
     /** 不同方法 对应传递参数的 key 集合 默认的传参 key 为 data */
-    methodsForDataKeyNames?: Partial<Record<keyof methods, string>> &
-        Record<string, string>;
+    methodsForDataKeyNames?: Record<string, string>;
 }
 
-interface methods {
-    get: "GET";
-    post: "POST";
-    put: "PUT";
-    delete: "DELETE";
-    options: "OPTIONS";
-    head: "HEAD";
-    trace: "TRACE";
-    connect: "CONNECT";
-}
+// interface methods {
+//     get: "GET";
+//     post: "POST";
+//     put: "PUT";
+//     delete: "DELETE";
+//     options: "OPTIONS";
+//     head: "HEAD";
+//     trace: "TRACE";
+//     connect: "CONNECT";
+// }
 
 type RequestOptions = {
     /** 开发者服务器接口地址 */
     url: string;
     /** HTTP 请求方法 */
-    method: keyof methods;
+    method?: string;
     /** 请求的参数 */
     data?: any;
 } & Record<string, any>;
@@ -256,16 +255,7 @@ class ApiManage {
             replaceStr: "serve",
             hooks: {},
             limitResponse: (result: any) => result,
-            defaultMethodNames: [
-                "get",
-                "post",
-                "put",
-                "delete",
-                "options",
-                "head",
-                "trace",
-                "connect",
-            ],
+            defaultMethodNames: ["get", "post", "put", "delete"],
             methodsForDataKeyNames: {
                 get: "params",
             },
