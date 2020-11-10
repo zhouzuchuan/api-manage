@@ -1,5 +1,4 @@
 import ApiManage from "../lib";
-import axios from "axios";
 
 describe("测试 static bindApi -------->", () => {
     const apiIndex = {

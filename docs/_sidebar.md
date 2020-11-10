@@ -5,6 +5,7 @@
 -   **深入**
 -   [清单拆分](/deep/thunk.md)
 -   [常见问题](/deep/question.md)
+-   [版本更新](/deep/version.md)
 
 -   **案列**
 -   [Vue](/demo/vue.md)

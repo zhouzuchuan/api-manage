@@ -9,7 +9,7 @@ export interface ApiManageOptions
     request: (options: RequestOptions) => any;
 
     /** 处理 response 的数据格式 */
-    limitResponse?: (res: any) => any;
+    limitResponse?: (res: any, serveName?: string) => any;
 
     /** 验证请求结果是否通过 */
     validate?: (response?: any, serveName?: string) => boolean;
@@ -381,7 +381,7 @@ class ApiManage {
                                         }
 
                                         hooks?.resolve?.(serveName, timestamp);
-                                        resolve(limitResponse(res));
+                                        resolve(limitResponse(res, serveName));
                                     } else {
                                         reject({
                                             error: "api-manage validate false",

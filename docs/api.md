@@ -1,12 +1,24 @@
 ## 一、实例化参数
 
-### `request`
+### `request` `【必填】`
 
-请求库 默认采用的是 `axios`，如果使用其他库 则可以直接赋值
+请求库 
+
+```js
+import axios from 'axios'
+
+// 配置
+{
+    request: axios,
+}
+```
+
 
 PS：使用其他库有限制，对库的使用必须是下面这种形式（如果库原生不是采用这种方式调用的 则需要自己二次封装）
 
 ```js
+// 二次封装传参，参考 axios
+
 other({
     mehtod: "get",
     url: ""
@@ -14,21 +26,25 @@ other({
 });
 ```
 
-### `CancelToken`
+### `list` `【必填】`
 
-中断请求函数 （该功能默认采用的是 `axios.CancelToken` ），主要应用场景 是将同一个地址的多次请求，中断取消，只保留最后一个
-
-如果应用不使用中断功能 则将其设置为 `undefined`
+api 清单 
 
 ```js
+
 {
-    CancelToken: undefined,
+    post: {
+        apiHome_GetToken: "/getToken"
+    },
+    get: {
+        apiHome_GetInfo: "/getUserInfo"
+    },
+    delete: {
+        apiHome_DeleteInfo: "/deleteInfo"
+    }
 }
-```
 
-### `list`
-
-api 清单
+``` 
 
 ### `matchStr`
 
@@ -37,6 +53,19 @@ api 名称需要替换的前缀，默认是 `api`
 ### `replaceStr`
 
 api 名称替换后的前缀，默认是 `serve`
+
+### `CancelRequest`
+
+设置中断请求函数， 如果使用的是 `axios`，则可以使用 `axios.CancelToken` ，主要应用场景 是将同一个地址的多次请求，中断取消，只保留最后一个
+
+```js
+import axios from 'axios'
+
+// 配置
+{
+    CancelToken: axios.CancelToken,
+}
+```
 
 ### `hooks`
 
@@ -78,12 +107,28 @@ api 名称替换后的前缀，默认是 `serve`
  *
 */
 {
-    limitResponse: res => {
+
+    // serveName 就是请求函数名，可以用这个来对特定的请求做处理
+    limitResponse: (res, serveName) => {
         return res.data
     },
     // ...
 }
 ```
+
+```
+PS：请求函数执行结束 返回两个参数，第一个为处理后的数据，第二个是未处理返回的数据
+```
+
+```js
+// 请求函数
+serveQueryList().then((data, result) => {
+    // data 是经过 limitResponse 处理后的数据
+    // result 是接口原本返回的参数
+})
+
+```
+
 
 ### `customize`
 
@@ -108,15 +153,16 @@ api 名称替换后的前缀，默认是 `serve`
 
 ```js
 {
-    validate: res => {
+    // serveName 就是请求函数名，可以用这个来对特定的请求做处理
+    validate: (res, serveName) => {
         if (res.code !== 0) {
             return false;
-        }
-
+        } 
         return true;
     };
 }
 ```
+
 
 ```
 PS：这里方法是在 limitResponse 之前调用处理
