@@ -28,7 +28,7 @@ Vue.prototype.$service = new apiManage({
 // 子组件中方法调用
 
 export default {
-    mounted() {
+    created() {
         this.$service.serveGetToken(); // 调用方法
     }
 };

@@ -67,6 +67,9 @@ type ServeFnOptions = {
     cancelParams?: {
         /** 是否是计算全部路径 */
         isCalcFullPath?: boolean;
+
+        /** 当前函数是否开启取消重复请求功能 */
+        open?: boolean
     };
 } & { [p in string]: any };
 
@@ -327,7 +330,7 @@ class ApiManage {
 
                         let requestToken = "";
                         // 如果存在取消请求函数 则 执行以及初始化 取消请求
-                        if (CancelRequest) {
+                        if (CancelRequest && (cancelParams?.open ?? true)) {
                             requestToken = ApiManage.createCancelToken(
                                 requestParams as any,
                                 cancelParams
@@ -443,7 +446,7 @@ class ApiManage {
                             query =
                                 method === "get"
                                     ? this.mergeQuery(query, data)
-                                    : (query ?? "").tirm().replace("?", "");
+                                    : (query ?? "").trim().replace("?", "");
 
                             if (typeof protocol === "string") {
                                 protocol = protocol.replace(":", "");
