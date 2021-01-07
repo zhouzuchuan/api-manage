@@ -1,6 +1,6 @@
 {
     "name": "api-manage",
-    "version": "2.3",
+    "version": "2.3.0",
     "description": "api服务管理解决方案",
     "main": "lib",
     "scripts": {
