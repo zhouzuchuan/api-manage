@@ -272,6 +272,7 @@ ApiMamage.bindApi([apiList1, apiList2], { server: "/api" });
 
     -   `tplData`: 路径模板解析需要的参数
     -   `cancelParams`: 中断请求配置
+    -   `isLimit`: 接口返回的参数是否被 `limitResponse` 函数处理
 
         -   `isCalcFullPath`: 中断 token 是否是进行全路径计算。 默认： `true`
 

@@ -70,7 +70,11 @@ type ServeFnOptions = {
 
         /** 当前函数是否开启取消重复请求功能 */
         open?: boolean
+
     };
+    /** 当前函数是否开启数据截取功能 */
+    isLimit?: boolean;
+
 } & { [p in string]: any };
 
 type ApiList = Record<string, Record<string, string>>;
@@ -257,7 +261,7 @@ class ApiManage {
             matchStr: "api",
             replaceStr: "serve",
             hooks: {},
-            limitResponse: (result: any) => result,
+            limitResponse: (result) => result,
             defaultMethodNames: ["get", "post", "put", "delete"],
             methodsForDataKeyNames: {
                 get: "params",
@@ -320,7 +324,7 @@ class ApiManage {
                     ...r,
                     [method]: (path: string, serveName: string) => (
                         params: any,
-                        { tplData = {}, cancelParams = {}, ...config }: any = {}
+                        { tplData = {}, cancelParams = {}, isLimit = true, ...config }: any = {}
                     ) => {
                         const requestParams = {
                             method,
@@ -384,7 +388,7 @@ class ApiManage {
                                         }
 
                                         hooks?.resolve?.(serveName, timestamp);
-                                        resolve(limitResponse(res, serveName));
+                                        resolve(isLimit ? limitResponse(res, serveName) : res);
                                     } else {
                                         reject({
                                             error: "api-manage validate false",

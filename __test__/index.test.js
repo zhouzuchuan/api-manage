@@ -46,6 +46,25 @@ describe("测试 基础 用法 -------->", () => {
             });
     });
 
+
+    it("测试 isLimit 不处理返回数据！", () => {
+        return requestList
+            .serveGetList(null, {
+                isLimit: false
+            })
+            .then((res) => {
+                expect(res.data).toEqual({
+                    userId: 1,
+                    id: 1,
+                    title: "delectus aut autem",
+                    completed: false,
+                });
+            })
+            .catch(() => {
+                console.log("请求失效！");
+            });
+    });
+
     it("测试 请求 中断！", () => {
         let temp = false;
         requestList.serveGetList2({}, { tplData: { id: 2 } }).catch((a) => {
