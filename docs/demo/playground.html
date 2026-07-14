@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>api-manage Playground</title>
+        <style>
+            :root {
+                color-scheme: light;
+                --bg: #f6f8fb;
+                --surface: #ffffff;
+                --surface-2: #eef2f7;
+                --text: #18202f;
+                --muted: #657386;
+                --border: #d8e0ea;
+                --primary: #1262d6;
+                --primary-dark: #0b4ba7;
+                --danger: #b42318;
+                --success: #067647;
+                --code: #111827;
+                --focus: #73a7ff;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                min-height: 100vh;
+                background: var(--bg);
+                color: var(--text);
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                    sans-serif;
+                font-size: 15px;
+                line-height: 1.5;
+            }
+
+            button,
+            input,
+            select,
+            textarea {
+                font: inherit;
+            }
+
+            button,
+            select,
+            textarea,
+            input[type="checkbox"] {
+                outline-color: var(--focus);
+            }
+
+            .shell {
+                max-width: 1440px;
+                margin: 0 auto;
+                padding: 24px;
+            }
+
+            .topbar {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 16px;
+                margin-bottom: 18px;
+            }
+
+            h1 {
+                margin: 0;
+                font-size: 24px;
+                line-height: 1.2;
+            }
+
+            .subtitle {
+                margin: 6px 0 0;
+                color: var(--muted);
+            }
+
+            .status {
+                min-width: 150px;
+                padding: 8px 10px;
+                border: 1px solid var(--border);
+                background: var(--surface);
+                color: var(--muted);
+                text-align: center;
+                font-size: 13px;
+            }
+
+            .status.success {
+                color: var(--success);
+                border-color: #9bd6bf;
+                background: #ecfdf3;
+            }
+
+            .status.error {
+                color: var(--danger);
+                border-color: #f3b5af;
+                background: #fff4f2;
+            }
+
+            .layout {
+                display: grid;
+                grid-template-columns: minmax(320px, 410px) minmax(0, 1fr);
+                gap: 18px;
+                align-items: start;
+            }
+
+            .panel {
+                border: 1px solid var(--border);
+                background: var(--surface);
+            }
+
+            .panel-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 14px 16px;
+                border-bottom: 1px solid var(--border);
+                background: var(--surface-2);
+            }
+
+            .panel-title {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 650;
+            }
+
+            .panel-body {
+                padding: 16px;
+            }
+
+            .field {
+                display: grid;
+                gap: 7px;
+                margin-bottom: 14px;
+            }
+
+            label,
+            .label {
+                color: var(--muted);
+                font-size: 13px;
+                font-weight: 600;
+            }
+
+            select,
+            textarea {
+                width: 100%;
+                border: 1px solid var(--border);
+                background: #fff;
+                color: var(--text);
+                border-radius: 6px;
+            }
+
+            select {
+                min-height: 44px;
+                padding: 0 12px;
+            }
+
+            textarea {
+                min-height: 116px;
+                resize: vertical;
+                padding: 10px 12px;
+                font-family: "SFMono-Regular", Consolas, "Liberation Mono",
+                    monospace;
+                font-size: 13px;
+                line-height: 1.45;
+                tab-size: 4;
+            }
+
+            .endpoint-meta {
+                display: grid;
+                grid-template-columns: 80px minmax(0, 1fr);
+                gap: 8px;
+                margin-bottom: 14px;
+            }
+
+            .meta-box {
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+                padding: 8px 10px;
+                border: 1px solid var(--border);
+                background: var(--surface-2);
+                color: var(--text);
+                border-radius: 6px;
+                overflow-wrap: anywhere;
+            }
+
+            .method {
+                justify-content: center;
+                font-weight: 800;
+                color: var(--primary-dark);
+            }
+
+            .toggle-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                min-height: 48px;
+                padding: 10px 12px;
+                border: 1px solid var(--border);
+                background: var(--surface-2);
+                border-radius: 6px;
+            }
+
+            .toggle-row input {
+                width: 22px;
+                height: 22px;
+            }
+
+            .actions {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 10px;
+                margin-top: 16px;
+            }
+
+            .button {
+                min-height: 44px;
+                border: 1px solid transparent;
+                border-radius: 6px;
+                background: var(--primary);
+                color: #fff;
+                cursor: pointer;
+                font-weight: 700;
+            }
+
+            .button:hover {
+                background: var(--primary-dark);
+            }
+
+            .button.secondary {
+                border-color: var(--border);
+                background: #fff;
+                color: var(--text);
+            }
+
+            .button.secondary:hover {
+                background: var(--surface-2);
+            }
+
+            .button.danger {
+                background: var(--danger);
+            }
+
+            .button.danger:hover {
+                background: #8e1b13;
+            }
+
+            .result-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 14px;
+            }
+
+            .output {
+                min-width: 0;
+                border: 1px solid var(--border);
+                background: #fff;
+            }
+
+            .output h3 {
+                margin: 0;
+                padding: 10px 12px;
+                border-bottom: 1px solid var(--border);
+                background: var(--surface-2);
+                font-size: 13px;
+                color: var(--muted);
+            }
+
+            pre {
+                min-height: 150px;
+                max-height: 330px;
+                margin: 0;
+                padding: 12px;
+                overflow: auto;
+                color: var(--code);
+                font-family: "SFMono-Regular", Consolas, "Liberation Mono",
+                    monospace;
+                font-size: 13px;
+                line-height: 1.45;
+                white-space: pre-wrap;
+                overflow-wrap: anywhere;
+            }
+
+            .log-list {
+                min-height: 150px;
+                max-height: 330px;
+                margin: 0;
+                padding: 0;
+                overflow: auto;
+                list-style: none;
+            }
+
+            .log-item {
+                display: grid;
+                grid-template-columns: 72px minmax(0, 1fr);
+                gap: 10px;
+                padding: 9px 12px;
+                border-bottom: 1px solid var(--border);
+                font-family: "SFMono-Regular", Consolas, "Liberation Mono",
+                    monospace;
+                font-size: 12px;
+            }
+
+            .log-item:last-child {
+                border-bottom: 0;
+            }
+
+            .log-type {
+                font-weight: 800;
+                color: var(--primary-dark);
+            }
+
+            .log-type.reject,
+            .log-type.error {
+                color: var(--danger);
+            }
+
+            .log-type.resolve,
+            .log-type.finally {
+                color: var(--success);
+            }
+
+            .notice {
+                margin: 12px 0 0;
+                color: var(--muted);
+                font-size: 13px;
+            }
+
+            @media (max-width: 960px) {
+                .layout {
+                    grid-template-columns: 1fr;
+                }
+
+                .result-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+
+            @media (max-width: 640px) {
+                .shell {
+                    padding: 14px;
+                }
+
+                .topbar,
+                .panel-header {
+                    display: grid;
+                }
+
+                .endpoint-meta,
+                .actions {
+                    grid-template-columns: 1fr;
+                }
+
+                h1 {
+                    font-size: 21px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <main class="shell">
+            <header class="topbar">
+                <div>
+                    <h1>api-manage Playground</h1>
+                    <p class="subtitle">
+                        在浏览器中演示 list、resolve、limitResponse、isLimit 和重复请求取消。
+                    </p>
+                </div>
+                <div id="status" class="status" role="status" aria-live="polite">
+                    Ready
+                </div>
+            </header>
+
+            <section class="layout">
+                <form id="controls" class="panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">Request</h2>
+                    </div>
+                    <div class="panel-body">
+                        <div class="field">
+                            <label for="endpoint">Endpoint</label>
+                            <select id="endpoint">
+                                <option value="getUser">serveGetUser</option>
+                                <option value="createUser">serveCreateUser</option>
+                                <option value="runtimeDetail">runtimeDetail</option>
+                            </select>
+                        </div>
+
+                        <div class="endpoint-meta" aria-label="Selected endpoint">
+                            <div id="method" class="meta-box method">GET</div>
+                            <div id="path" class="meta-box">/users/:id</div>
+                        </div>
+
+                        <div class="field">
+                            <label for="params">Params JSON</label>
+                            <textarea id="params" spellcheck="false"></textarea>
+                        </div>
+
+                        <div class="field">
+                            <label for="tplData">tplData JSON</label>
+                            <textarea id="tplData" spellcheck="false"></textarea>
+                        </div>
+
+                        <div class="field">
+                            <label for="headers">Headers JSON</label>
+                            <textarea id="headers" spellcheck="false"></textarea>
+                        </div>
+
+                        <label class="toggle-row" for="isLimit">
+                            <span>
+                                <span class="label">isLimit</span><br />
+                                <span id="limitHelp">true: 返回 limitResponse 后的数据</span>
+                            </span>
+                            <input id="isLimit" type="checkbox" checked />
+                        </label>
+
+                        <div class="actions">
+                            <button class="button" type="button" id="runBtn">
+                                Run
+                            </button>
+                            <button
+                                class="button secondary"
+                                type="button"
+                                id="resolveBtn"
+                            >
+                                Resolve
+                            </button>
+                            <button
+                                class="button danger"
+                                type="button"
+                                id="cancelBtn"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+
+                        <p class="notice">
+                            TypeScript 对应写法：defineApi&lt;Raw, Params, Limited&gt;。
+                        </p>
+                    </div>
+                </form>
+
+                <section class="panel">
+                    <div class="panel-header">
+                        <h2 class="panel-title">Output</h2>
+                    </div>
+                    <div class="panel-body">
+                        <div class="result-grid">
+                            <section class="output">
+                                <h3>resolve()</h3>
+                                <pre id="resolveOutput">{}</pre>
+                            </section>
+                            <section class="output">
+                                <h3>request options</h3>
+                                <pre id="requestOutput">{}</pre>
+                            </section>
+                            <section class="output">
+                                <h3>raw response</h3>
+                                <pre id="rawOutput">{}</pre>
+                            </section>
+                            <section class="output">
+                                <h3>returned value</h3>
+                                <pre id="resultOutput">{}</pre>
+                            </section>
+                            <section class="output">
+                                <h3>hooks log</h3>
+                                <ul id="logOutput" class="log-list"></ul>
+                            </section>
+                            <section class="output">
+                                <h3>type note</h3>
+                                <pre id="typeOutput"></pre>
+                            </section>
+                        </div>
+                    </div>
+                </section>
+            </section>
+        </main>
+
+        <script>
+            const endpoints = {
+                getUser: {
+                    serveName: "serveGetUser",
+                    method: "get",
+                    path: "/users/:id",
+                    params: { keyword: "tom" },
+                    tplData: { id: 1 },
+                    headers: { token: "demo-token" },
+                    limitedType: "DemoPayload",
+                    rawType: "DemoResponse<DemoPayload>",
+                },
+                createUser: {
+                    serveName: "serveCreateUser",
+                    method: "post",
+                    path: "/users",
+                    params: { name: "Tom" },
+                    tplData: {},
+                    headers: {},
+                    limitedType: "DemoPayload",
+                    rawType: "DemoResponse<DemoPayload>",
+                },
+                runtimeDetail: {
+                    serveName: "runtimeDetail",
+                    method: "post",
+                    path: "/runtime/:id/detail",
+                    params: { userId: 1 },
+                    tplData: { id: "abc" },
+                    headers: { noEncrypt: true },
+                    limitedType: "DemoPayload",
+                    rawType: "DemoResponse<DemoPayload>",
+                    dynamic: true,
+                },
+            };
+
+            const state = {
+                pending: new Map(),
+                lastToken: "",
+                logId: 0,
+            };
+
+            const $ = (id) => document.getElementById(id);
+            const endpointEl = $("endpoint");
+            const methodEl = $("method");
+            const pathEl = $("path");
+            const paramsEl = $("params");
+            const tplDataEl = $("tplData");
+            const headersEl = $("headers");
+            const isLimitEl = $("isLimit");
+            const statusEl = $("status");
+
+            function pretty(value) {
+                return JSON.stringify(value, null, 2);
+            }
+
+            function writeOutput(id, value) {
+                $(id).textContent =
+                    typeof value === "string" ? value : pretty(value);
+            }
+
+            function setStatus(text, kind) {
+                statusEl.textContent = text;
+                statusEl.className = kind ? `status ${kind}` : "status";
+            }
+
+            function parseJsonInput(el, label) {
+                const value = el.value.trim();
+                if (!value) return {};
+                try {
+                    return JSON.parse(value);
+                } catch (error) {
+                    throw new Error(`${label} 不是合法 JSON，请检查逗号、引号或括号。`);
+                }
+            }
+
+            function template(path, data) {
+                let index = 0;
+                const isArray = Array.isArray(data);
+                const isObject =
+                    Object.prototype.toString.call(data).slice(8, -1).toLowerCase() ===
+                    "object";
+                const values = !isArray && !isObject ? [data] : data;
+
+                return path
+                    .split("/")
+                    .map((part) => {
+                        if (!part.startsWith(":")) return part;
+                        const key = isObject ? part.slice(1) : index++;
+                        const nextValue = values[key];
+                        return typeof nextValue === "undefined" ? part : `${nextValue}`;
+                    })
+                    .join("/");
+            }
+
+            function mergeQuery(query, data) {
+                const current =
+                    typeof query === "string" && query.trim()
+                        ? query.trim().replace("?", "").split("&").map((item) => item.split("="))
+                        : [];
+                return current
+                    .concat(Object.entries(data || {}))
+                    .map((item) => item.join("="))
+                    .join("&");
+            }
+
+            function parseLocation(url) {
+                const match = url.match(
+                    /^(?:(https?:)\/\/)?([^:/]*)(?::([^/]*))?([^?#]*)(\?[^#]+)?(#.+)?/,
+                );
+                const [, protocol, hostname, port, pathname, query, hash] = match;
+                return { protocol, hostname, port, pathname, query, hash };
+            }
+
+            function resolveRequest(endpoint, params, tplData) {
+                let { protocol, hostname, port, pathname, query, hash } =
+                    parseLocation(template(endpoint.path, tplData));
+
+                query =
+                    endpoint.method === "get"
+                        ? mergeQuery(query, params)
+                        : (query || "").trim().replace("?", "");
+
+                if (typeof protocol === "string") {
+                    protocol = protocol.replace(":", "");
+                }
+
+                return {
+                    url: endpoint.path,
+                    name: endpoint.serveName,
+                    method: endpoint.method,
+                    hostname,
+                    pathname,
+                    port,
+                    hash,
+                    protocol,
+                    query,
+                    requestUrl: `${protocol ? `${protocol}://` : ""}${hostname || ""}${
+                        port ? `:${port}` : ""
+                    }${pathname || ""}${query ? `?${query}` : ""}${hash || ""}`,
+                };
+            }
+
+            function getCurrentInput() {
+                const endpoint = endpoints[endpointEl.value];
+                const params = parseJsonInput(paramsEl, "Params JSON");
+                const tplData = parseJsonInput(tplDataEl, "tplData JSON");
+                const headers = parseJsonInput(headersEl, "Headers JSON");
+                return { endpoint, params, tplData, headers };
+            }
+
+            function createRequestOptions(endpoint, params, tplData, headers) {
+                const dataKey = endpoint.method === "get" ? "params" : "data";
+                return {
+                    method: endpoint.method,
+                    url: template(endpoint.path, tplData),
+                    [dataKey]: params,
+                    headers,
+                };
+            }
+
+            function createCancelToken(requestOptions) {
+                const body =
+                    requestOptions.method === "get"
+                        ? { params: requestOptions.params || {} }
+                        : { data: requestOptions.data || {} };
+                return encodeURIComponent(requestOptions.url + JSON.stringify(body));
+            }
+
+            function addLog(type, message) {
+                const item = document.createElement("li");
+                item.className = "log-item";
+
+                const typeEl = document.createElement("span");
+                typeEl.className = `log-type ${type}`;
+                typeEl.textContent = type;
+
+                const msgEl = document.createElement("span");
+                msgEl.textContent = message;
+
+                item.append(typeEl, msgEl);
+                $("logOutput").prepend(item);
+            }
+
+            function validate(response) {
+                return response.data.code === 200;
+            }
+
+            function limitResponse(response) {
+                return response.data.ret;
+            }
+
+            function mockRequest(options, token) {
+                return new Promise((resolve, reject) => {
+                    const timer = window.setTimeout(() => {
+                        const pending = state.pending.get(token);
+                        if (!pending || pending.canceled) {
+                            reject(new Error("取消重复请求"));
+                            return;
+                        }
+
+                        resolve({
+                            data: {
+                                code: 200,
+                                ret: {
+                                    method: options.method,
+                                    url: options.url,
+                                    params: options.params,
+                                    data: options.data,
+                                    headers: options.headers,
+                                },
+                            },
+                        });
+                    }, 420);
+
+                    state.pending.set(token, { timer, reject, canceled: false });
+                });
+            }
+
+            async function runRequest() {
+                try {
+                    setStatus("Running", "");
+                    const { endpoint, params, tplData, headers } = getCurrentInput();
+                    const resolved = resolveRequest(endpoint, params, tplData);
+                    const requestOptions = createRequestOptions(
+                        endpoint,
+                        params,
+                        tplData,
+                        headers,
+                    );
+                    const token = createCancelToken(requestOptions);
+                    state.lastToken = token;
+
+                    if (state.pending.has(token)) {
+                        const pending = state.pending.get(token);
+                        pending.canceled = true;
+                        window.clearTimeout(pending.timer);
+                        state.pending.delete(token);
+                        pending.reject(new Error("取消重复请求"));
+                        addLog("reject", `${endpoint.serveName} duplicate canceled`);
+                    }
+
+                    addLog("start", endpoint.serveName);
+                    writeOutput("resolveOutput", resolved);
+                    writeOutput("requestOutput", requestOptions);
+
+                    const raw = await mockRequest(requestOptions, token);
+                    state.pending.delete(token);
+
+                    if (!validate(raw)) {
+                        throw new Error("api-manage validate false");
+                    }
+
+                    addLog("resolve", endpoint.serveName);
+                    writeOutput("rawOutput", raw);
+
+                    const result = isLimitEl.checked ? limitResponse(raw) : raw;
+                    writeOutput("resultOutput", result);
+                    addLog("finally", endpoint.serveName);
+                    writeTypeNote(endpoint);
+                    setStatus("Complete", "success");
+                } catch (error) {
+                    addLog("error", error.message);
+                    setStatus("Error", "error");
+                    writeOutput("resultOutput", { error: error.message });
+                }
+            }
+
+            function resolveOnly() {
+                try {
+                    const { endpoint, params, tplData, headers } = getCurrentInput();
+                    const resolved = resolveRequest(endpoint, params, tplData);
+                    const requestOptions = createRequestOptions(
+                        endpoint,
+                        params,
+                        tplData,
+                        headers,
+                    );
+                    writeOutput("resolveOutput", resolved);
+                    writeOutput("requestOutput", requestOptions);
+                    writeTypeNote(endpoint);
+                    setStatus("Resolved", "success");
+                } catch (error) {
+                    addLog("error", error.message);
+                    setStatus("Error", "error");
+                    writeOutput("resolveOutput", { error: error.message });
+                }
+            }
+
+            function cancelDuplicate() {
+                try {
+                    const { endpoint, params, tplData, headers } = getCurrentInput();
+                    const requestOptions = createRequestOptions(
+                        endpoint,
+                        params,
+                        tplData,
+                        headers,
+                    );
+                    const token = createCancelToken(requestOptions);
+                    const pending = state.pending.get(token) || state.pending.get(state.lastToken);
+
+                    if (!pending) {
+                        addLog("reject", "no pending duplicate request");
+                        setStatus("No pending", "");
+                        return;
+                    }
+
+                    pending.canceled = true;
+                    window.clearTimeout(pending.timer);
+                    state.pending.delete(token);
+                    state.pending.delete(state.lastToken);
+                    pending.reject(new Error("取消重复请求"));
+                    addLog("reject", "取消重复请求");
+                    setStatus("Canceled", "error");
+                } catch (error) {
+                    addLog("error", error.message);
+                    setStatus("Error", "error");
+                }
+            }
+
+            function writeTypeNote(endpoint) {
+                const limited = endpoint.limitedType;
+                const raw = endpoint.rawType;
+                writeOutput(
+                    "typeOutput",
+                    [
+                        `defineApi<${raw}, Params, ${limited}>`,
+                        "",
+                        isLimitEl.checked
+                            ? `当前返回类型: ${limited}`
+                            : `当前返回类型: ${raw}`,
+                        "",
+                        "默认 isLimit 为 true；传入 { isLimit: false } 时返回原始响应。",
+                    ].join("\n"),
+                );
+            }
+
+            function syncEndpoint() {
+                const endpoint = endpoints[endpointEl.value];
+                methodEl.textContent = endpoint.method.toUpperCase();
+                pathEl.textContent = endpoint.path;
+                paramsEl.value = pretty(endpoint.params);
+                tplDataEl.value = pretty(endpoint.tplData);
+                headersEl.value = pretty(endpoint.headers);
+                writeOutput("resolveOutput", {});
+                writeOutput("requestOutput", {});
+                writeOutput("rawOutput", {});
+                writeOutput("resultOutput", {});
+                writeTypeNote(endpoint);
+                setStatus("Ready", "");
+            }
+
+            endpointEl.addEventListener("change", syncEndpoint);
+            isLimitEl.addEventListener("change", () => {
+                const endpoint = endpoints[endpointEl.value];
+                $("limitHelp").textContent = isLimitEl.checked
+                    ? "true: 返回 limitResponse 后的数据"
+                    : "false: 返回原始响应";
+                writeTypeNote(endpoint);
+            });
+            $("runBtn").addEventListener("click", runRequest);
+            $("resolveBtn").addEventListener("click", resolveOnly);
+            $("cancelBtn").addEventListener("click", cancelDuplicate);
+
+            syncEndpoint();
+        </script>
+    </body>
+</html>

@@ -1,54 +1,77 @@
-## React 使用案例
+# React 使用案例
 
-```js
-// api.js
-export default ({ server }) => {
-    post: {
-        apiGetToken: `${server}/getToken`;
-    }
+React 项目中建议封装一个 `useService`，避免在组件里重复创建 `ApiManage` 实例。
+
+## 推荐写法
+
+```ts
+// api.ts
+import { defineApi } from "api-manage";
+
+type ApiResponse<T> = {
+    code: number;
+    data: T;
 };
+
+type TokenInfo = {
+    token: string;
+};
+
+export default ({ server }: { server: string }) =>
+    ({
+        post: {
+            apiGetToken: defineApi<ApiResponse<TokenInfo>, { code: string }>(
+                `${server}/getToken`,
+            ),
+        },
+    }) as const;
 ```
 
-`React` 开发规范中不建议用其 `prototype` ,所以 创建一个 hooks 函数来使用
-
-```js
-// api.js
+```ts
+// service.ts
 import React from "react";
+import ApiManage from "api-manage";
 import apiList from "./api";
-import ApiManage from "api-manage"; 
+import request from "./request";
 
-// 注入api清单
-const apiManage = new apiManage({
-    list: ApiManage.bindApi([apiList], { server: "/api" })
+const list = apiList({ server: "/api" });
+
+const apiManage = new ApiManage<typeof list>({
+    request,
+    list,
+    validate: (res) => res.code === 0,
+    limitResponse: (res) => res.data,
 });
- 
 
-export const useService = () => React.useMemo(() => apiManage.getService(),[])
- 
+export const useService = () =>
+    React.useMemo(() => apiManage.getService(), []);
 ```
- 
 
-```js
+```tsx
 import React from "react";
-import { useService } from "./api.js";
-// 子组件中方法调用
+import { useService } from "./service";
 
-export default function() {
+export default function Login() {
     const { serveGetToken } = useService();
 
     React.useEffect(() => {
-        // 调用
-        serveGetToken().then(res => {
-            // ...
+        serveGetToken({ code: "login-code" }).then((token) => {
+            console.log(token.token);
         });
-    }, []);
+    }, [serveGetToken]);
 
-    return (
-        <div>
-            {
-                // ....
-            }
-        </div>
-    );
+    return <div>Login</div>;
 }
 ```
+
+## 兼容旧字符串清单
+
+```ts
+export default ({ server }: { server: string }) => ({
+    post: {
+        apiGetToken: `${server}/getToken`,
+    },
+});
+```
+
+多个旧字符串清单需要运行时合并时，可以继续使用 `ApiManage.bindApi`。

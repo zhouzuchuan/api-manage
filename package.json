@@ -1,16 +1,31 @@
 {
     "name": "api-manage",
-    "version": "2.3.0",
+    "version": "3.0.0",
     "description": "api服务管理解决方案",
-    "main": "lib",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "files": [
+        "lib/index.js",
+        "lib/index.d.ts",
+        "README.md",
+        "README_v2.md",
+        "README_v1.md",
+        "LICENSE"
+    ],
     "scripts": {
-        "type-check": "tsc --noEmit",
+        "start": "npm run start:docs",
+        "start:docs": "python3 -m http.server 3000 --bind 127.0.0.1 --directory docs",
+        "start:playground": "python3 -m http.server 3000 --bind 127.0.0.1 --directory docs",
+        "demo": "npm run demo:cli",
+        "demo:cli": "npm run build && node demo/current.js",
+        "type-check": "tsc --noEmit && tsc --noEmit --target esnext --module commonjs --strict --esModuleInterop --allowSyntheticDefaultImports __test__/types.ts",
         "type-check:watch": "npm run type-check -- --watch",
         "build": "npm run build:types && npm run build:js",
         "build:types": "tsc --emitDeclarationOnly",
-        "build:js": "babel src --out-dir lib --extensions \".ts\"",
+        "build:js": "babel src/index.ts --out-file lib/index.js --extensions \".ts\"",
         "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s -r 0",
         "test": "npm run build && jest",
+        "release": "node scripts/release.js",
         "patch": "npm version patch",
         "prepublish": "npm run test"
     },
@@ -46,7 +61,7 @@
         "conventional-changelog": "^3.1.18",
         "jest": "^25.1.0",
         "sinon": "^8.1.1",
-        "typescript": "^3.7.5"
+        "typescript": "^4.9.5"
     },
     "dependencies": {}
 }

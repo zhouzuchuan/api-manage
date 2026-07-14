@@ -1,336 +1,396 @@
-## 一、实例化参数
+# API 参考
 
-### `request` `【必填】`
+本文档对应 `api-manage@3.0.0`。
 
-请求库 
+## 构造函数
 
-```js
-import axios from 'axios'
-
-// 配置
-{
-    request: axios,
-}
-```
-
-
-PS：使用其他库有限制，对库的使用必须是下面这种形式（如果库原生不是采用这种方式调用的 则需要自己二次封装）
-
-```js
-// 二次封装传参，参考 axios
-
-other({
-    mehtod: "get",
-    url: ""
-    // ....
+```ts
+const apiManage = new ApiManage({
+    list,
+    request,
+    limitResponse,
+    validate,
+    hooks,
+    CancelRequest,
 });
 ```
 
-### `list` `【必填】`
+### `list` 必填
 
-api 清单 
+API 清单。外层 key 是请求方法，内层 key 是接口名。
 
-```js
+推荐使用 `defineApi`：
 
-{
-    post: {
-        apiHome_GetToken: "/getToken"
-    },
+```ts
+import { defineApi } from "api-manage";
+
+const apiList = {
     get: {
-        apiHome_GetInfo: "/getUserInfo"
+        apiGetUser: defineApi<ApiResponse<UserInfo>, { id: number }>("/user"),
     },
-    delete: {
-        apiHome_DeleteInfo: "/deleteInfo"
-    }
-}
+    post: {
+        apiCreateUser: defineApi<ApiResponse<UserInfo>, { name: string }>(
+            "/user",
+        ),
+    },
+} as const;
+```
 
-``` 
+兼容旧字符串清单：
 
-### `matchStr`
+```ts
+const apiList = {
+    get: {
+        apiGetUser: "/user",
+    },
+} as const;
+```
 
-api 名称需要替换的前缀，默认是 `api`
+函数式清单适合注入环境前缀：
 
-### `replaceStr`
+```ts
+export default ({ server }: { server: string }) =>
+    ({
+        get: {
+            apiGetUser: defineApi<ApiResponse<UserInfo>, { id: number }>(
+                `${server}/user`,
+            ),
+        },
+    }) as const;
+```
 
-api 名称替换后的前缀，默认是 `serve`
+### `request` 必填
 
-### `CancelRequest`
+真正执行请求的函数。它必须接受一个对象，至少包含 `url`、`method`，并按方法接收 `params` 或 `data`。
 
-设置中断请求函数， 如果使用的是 `axios`，则可以使用 `axios.CancelToken` ，主要应用场景 是将同一个地址的多次请求，中断取消，只保留最后一个
+```ts
+const apiManage = new ApiManage<typeof apiList>({
+    list: apiList,
+    request: (options) => axios(options),
+});
+```
 
-```js
-import axios from 'axios'
+GET 默认把参数放到 `params`，其他方法默认放到 `data`：
 
-// 配置
-{
-    CancelToken: axios.CancelToken,
+```ts
+serveGetUser({ id: 1 });
+// request({ method: "get", url: "/user", params: { id: 1 } })
+
+serveCreateUser({ name: "Tom" });
+// request({ method: "post", url: "/user", data: { name: "Tom" } })
+```
+
+### `limitResponse`
+
+处理请求成功后的返回值。默认返回原始响应。
+
+```ts
+const apiManage = new ApiManage<typeof apiList>({
+    list: apiList,
+    request,
+    limitResponse: (res, serveName) => res.data,
+});
+```
+
+请求函数默认返回 `limitResponse` 后的数据；传入 `{ isLimit: false }` 时返回原始响应。
+
+```ts
+const data = await apis.serveGetUser({ id: 1 });
+const raw = await apis.serveGetUser({ id: 1 }, { isLimit: false });
+```
+
+类型层默认使用 `LimitResult<T>` 推导处理后类型。如果运行时不是 `res => res.data`，用 `defineApi` 第三个泛型指定：
+
+```ts
+apiGetUser: defineApi<RetResponse<UserInfo>, { id: number }, UserInfo>(
+    "/user",
+);
+```
+
+### `validate`
+
+在 `limitResponse` 前执行，支持同步或异步。返回 `false` 时请求会 reject。
+
+```ts
+validate: async (res, serveName) => {
+    return res.code === 0;
 }
 ```
 
 ### `hooks`
 
-钩子函数
+请求生命周期钩子。
 
-```js
-
-{
-    hooks: {
-        start: () => { /**/ },
-        resolve: () => { /**/ },
-        reject: () => { /**/ },
-        finally: () => { /**/ },
-    }
-    // ...
-}
-
-```
-
--   `start`: 请求前调用
--   `resolve`: 请求成功调用
--   `reject`: 请求失败调用
--   `finally`: 请求成功和失败都调用
-
-### `limitResponse`
-
-处理返回之后的数据
-
-`RESTful API 规范` 会在返回的函数中嵌套一层规范数据格式，但这部分格式在应用中用处却不大，反而增加了使用数据的复杂度，所以通过这个函数来处理，去除规范数据格式
-
-```js
-/***
- * 规范数据格式（data 才是应用中需要用到的数据）
- * {
- *     message: '',
- *     code: '',
- *     data: {}
- * }
- *
-*/
-{
-
-    // serveName 就是请求函数名，可以用这个来对特定的请求做处理
-    limitResponse: (res, serveName) => {
-        return res.data
-    },
-    // ...
+```ts
+hooks: {
+    start: (serveName, timestamp) => {},
+    resolve: (serveName, timestamp) => {},
+    reject: (serveName, timestamp, error) => {},
+    finally: (serveName, timestamp) => {},
 }
 ```
 
-```
-PS：请求函数执行结束 返回两个参数，第一个为处理后的数据，第二个是未处理返回的数据
+-   `start`：请求发起前
+-   `resolve`：`validate` 通过后
+-   `reject`：请求失败或 `validate` 返回 `false`
+-   `finally`：成功或失败都会触发
+
+### `CancelRequest`
+
+取消请求构造函数。常见场景是接入 axios CancelToken，用于取消重复请求。
+
+```ts
+const apiManage = new ApiManage({
+    list,
+    request: axios,
+    CancelRequest: axios.CancelToken,
+});
 ```
 
-```js
-// 请求函数
-serveQueryList().then((data, result) => {
-    // data 是经过 limitResponse 处理后的数据
-    // result 是接口原本返回的参数
-})
+默认会按 `url + params/data` 计算取消 token。可以通过 `cancelParams` 调整。
 
+### `matchStr` / `replaceStr`
+
+控制接口名到请求函数名的转换。
+
+```ts
+new ApiManage({
+    list,
+    request,
+    matchStr: "api",
+    replaceStr: "serve",
+});
 ```
 
+默认转换：
+
+```text
+apiGetUser -> serveGetUser
+```
+
+### `defaultMethodNames`
+
+默认支持的 HTTP 方法：
+
+```ts
+["get", "post", "put", "delete"]
+```
+
+如果需要支持更多方法：
+
+```ts
+defaultMethodNames: ["get", "post", "patch", "delete"];
+```
+
+### `methodsForDataKeyNames`
+
+配置不同方法的参数字段名。
+
+```ts
+methodsForDataKeyNames: {
+    get: "params",
+    post: "data",
+}
+```
+
+默认只有 `get` 使用 `params`，其他方法使用 `data`。
 
 ### `customize`
 
-返回指定类型的自定义请求参数（必须返回 `Promise`）
+为某个 method 自定义请求函数生成逻辑。
 
-```js
-{
-    customize: {
-        get: () => {
-            // 例如
-            return Promise.resolve();
-        };
-    }
+```ts
+customize: {
+    upload: (path, serveName) => {
+        const fn = ((data) => request({ method: "post", url: path, data })) as ServeFunction;
+        fn.resolve = () => ({ requestUrl: path || "" });
+        fn.abort = () => {};
+        return fn;
+    },
 }
 ```
 
-### `validate`
+## 实例方法
 
-统一验证请求结果 返回 `true` 则通过 默认返回 `true`
+### `getService<ResultMap, ParamsMap>()`
 
-通过这里可以对 返回的数据不符合要求的 进行过滤 不处理
+返回所有生成后的请求函数。
 
-```js
+```ts
+const apis = apiManage.getService();
+await apis.serveGetUser({ id: 1 });
+```
+
+旧字符串清单可以通过泛型补充类型：
+
+```ts
+type ResultMap = {
+    serveGetUser: ApiResponse<UserInfo>;
+};
+
+type ParamsMap = {
+    serveGetUser: { id: number };
+};
+
+const apis = apiManage.getService<ResultMap, ParamsMap>();
+```
+
+### `call<R>()`
+
+运行时动态请求。适合接口地址不是初始化时已知的场景。
+
+```ts
+const result = await apiManage.call<UserInfo>({
+    url: "/runtime/:id/detail",
+    method: "post",
+    data: { userId: 1 },
+    tplData: { id: "abc" },
+    serveName: "runtimeDetail",
+    config: {
+        headers: { noEncrypt: true },
+    },
+});
+```
+
+`call` 会复用 `request`、`validate`、`limitResponse`、`hooks` 和取消重复请求逻辑。
+
+### `resolve(serveName)`
+
+获取某个请求函数的地址解析方法。
+
+```ts
+const resolveGetUser = apiManage.resolve("serveGetUser");
+const data = resolveGetUser({ keyword: "tom" }, { id: 1 });
+
+console.log(data.requestUrl);
+```
+
+### `abort(serveName)`
+
+取消指定请求函数下的所有 pending 请求。
+
+```ts
+apiManage.abort("serveGetUser");
+```
+
+### `mergeQuery(str, data)`
+
+合并 URL query 字符串和对象。
+
+```ts
+apiManage.mergeQuery("?a=1", { b: 2 });
+// "a=1&b=2"
+```
+
+### `parseLocation(url)`
+
+解析 URL。
+
+```ts
+apiManage.parseLocation("https://example.com:8080/a?b=1#hash");
+```
+
+## 静态方法
+
+### `ApiManage.bindApi(fns, params)`
+
+合并多个 API 清单。
+
+```ts
+const list = ApiManage.bindApi([userApi, fileApi], {
+    server: "/api",
+});
+```
+
+支持对象清单和函数清单。
+
+### `ApiManage.template(template, data)`
+
+解析路径模板。
+
+```ts
+ApiManage.template("/user/:id", { id: 1 });
+// "/user/1"
+
+ApiManage.template("/user/:0/:1", [1, "profile"]);
+// "/user/1/profile"
+```
+
+`data` 类型为 `TemplateData`：`string | number | Array<string | number> | Record<string, string | number>`。
+
+### `ApiManage.flatApi(list)`
+
+把按 method 分组的清单拍平成：
+
+```ts
 {
-    // serveName 就是请求函数名，可以用这个来对特定的请求做处理
-    validate: (res, serveName) => {
-        if (res.code !== 0) {
-            return false;
-        } 
-        return true;
+    apiGetUser: {
+        path: "/user",
+        method: "get",
+    },
+}
+```
+
+### `ApiManage.replaceFnName(apiName, matchStr, replaceStr)`
+
+替换接口名前缀。
+
+```ts
+ApiManage.replaceFnName("apiGetUser", "api", "serve");
+// "serveGetUser"
+```
+
+### `ApiManage.createCancelToken(requestParams, cancelParams)`
+
+生成重复请求取消 token。
+
+```ts
+ApiManage.createCancelToken({
+    method: "get",
+    url: "/user",
+    params: { id: 1 },
+});
+```
+
+## 请求函数
+
+### `serveXxx(params, options)`
+
+```ts
+await apis.serveGetUser({ id: 1 });
+```
+
+`options` 支持：
+
+```ts
+type ServeFnOptions = {
+    tplData?: TemplateData;
+    cancelParams?: {
+        isCalcFullPath?: boolean;
+        open?: boolean;
     };
-}
+    isLimit?: boolean;
+} & Record<string, any>;
 ```
 
+-   `tplData`：路径模板数据
+-   `cancelParams.open`：是否开启重复请求取消，默认 `true`
+-   `cancelParams.isCalcFullPath`：取消 token 是否包含参数，默认 `true`
+-   `isLimit`：是否返回 `limitResponse` 后的数据，默认 `true`
+-   其他字段会透传到 `request`，例如 `headers`
 
-```
-PS：这里方法是在 limitResponse 之前调用处理
-```
+### `serveXxx.resolve(params, tplData)`
 
----
+只解析真实请求地址，不发请求。
 
-## 二、实例方法
-
-### `getService`
-
-该方法是获取所有经过处理后的 `请求函数`
-
-```js
-const apiManage = new ApiManage({
-    //...
-});
-
-const service = apiManage.getService();
+```ts
+apis.serveGetUser.resolve({ keyword: "tom" }, { id: 1 }).requestUrl;
 ```
 
-### `resolve`
+### `serveXxx.abort()`
 
-获取指定 serveName 请求函数的原型 resolve 解析函数方法
+取消当前请求函数所有 pending 请求。
 
-```js
-const apiManage = new ApiManage({
-    //...
-});
-
-const serveGetNamesResolve = apiManage.resolve("serveGetNames");
-
-// ....
-serveGetNamesResolve();
-```
-
-### `abort`
-
-中断指定 serveName 的所有请求
-
-```js
-const apiManage = new ApiManage({
-    //...
-});
-
-// 中断 serveGetNames 请求函数
-apiManage.abort("serveGetNames");
-```
-
----
-
-## 三、静态方法
-
-### `bindApi`
-
-该方法是将多个 `api清单` 合并为一个统一的 `api清单`
-
-```
-PS: 合并后的 api清单是 键值对形式并非是函数形式
-```
-
-该函数有两个参数
-
--   第一个参数是 `api清单` 集合
--   第二个参数是 如果 `api清单` 是 `函数形式` 则该参数则是 该函数的参数
-
-```js
-// 清单1
-export default ({ server }) => ({
-    get: {
-        apiHome_GetList: `${server}/aaa`
-    }
-});
-```
-
-```js
-// 清单2
-export default {
-    get: {
-        apiHome_GetList2: `/bbb`
-    }
-};
-```
-
-```js
-import ApiManage from "api-manage";
-
-// api 清单
-import apiList1 from "./api/list1";
-import apiList2 from "./api/list2";
-
-ApiMamage.bindApi([apiList1, apiList2], { server: "/api" });
-```
-
----
-
-## 四：请求函数
-
-### `执行请求`
-
-执行返回的是 `Promise`
-
-两个参数，分别如下
-
--   请求的需要传的参数
--   请求配置参数
-
-    -   `tplData`: 路径模板解析需要的参数
-    -   `cancelParams`: 中断请求配置
-    -   `isLimit`: 接口返回的参数是否被 `limitResponse` 函数处理
-
-        -   `isCalcFullPath`: 中断 token 是否是进行全路径计算。 默认： `true`
-
-```js
-// api 清单
-
-export default {
-    get: {
-        apiGetNames: "/api/:a/:b"
-    }
-};
-```
-
-```js
-// 省略初始化 ...
-
-const { serveGetNames } = apiManage.getService();
-
-// 执行请求
-serveGetNames({ name: "apimanage" }, { tplData: { a: 100, b: 20 } }).then(
-    res => {
-        // 操作
-    }
-);
-```
-
-### `原型方法 resolve`
-
-请求函数解析方法，可以返回当前函数的真实请求地址（应用场景：下载功能）
-
-两个参数，分别如下
-
--   请求的需要传的参数
--   路径模板解析需要的参数
-
-```js
-// 省略初始化 ...
-
-const { serveGetNames } = apiManage.getService();
-
-const resolveData = serveGetNames.resolve(
-    { name: "apimanage" },
-    { a: 100, b: 20 }
-);
-
-console.log(resolveData.requestUrl);
-//  ==> /api/100/20?name=apimanage
-```
-
-### `原型方法 abort`
-
-请求函数中断方法
-
-```js
-// 省略初始化 ...
-
-const { serveGetNames } = apiManage.getService();
-
-// 在应用中可以通过该方法 中断请求
-serveGetNames.abort();
+```ts
+apis.serveGetUser.abort();
 ```

@@ -1,35 +1,76 @@
-## 微信小程序
+# 小程序使用案例
 
-这里微信小程序 采用的 开发框架 `Taro` 来开发
+这里以 Taro / 微信小程序为例。小程序中不能直接使用 axios，可以把请求库封装成 `api-manage` 需要的 `request(options)` 形式。
 
-在小程序中 无法使用 axios, 这里使用的是 [fly](https://github.com/wendux/fly)。
-为了能使用 所以需要对其进行封装
+## request 封装
 
-```js
-// request.js
-
+```ts
+// request.ts
 import Fly from "flyio/dist/npm/wx";
+
 const fly = new Fly();
 
-export const request = ({ method, url, data }) => fly[method](url, data);
-```
-
-```js
-// api.js
-export default ({ server }) => {
-    post: {
-        apiGetToken: `${server}/getToken`;
-    }
+export const request = ({ method = "get", url, data, params, ...config }) => {
+    const body = method === "get" ? params : data;
+    return fly[method](url, body, config);
 };
 ```
 
-```js
-import ApiManage from "api-manage";
-import request from "./request";
-import apiList from "./api";
+## 推荐写法
 
-const apiManage = new apiManage({
+```ts
+// api.ts
+import { defineApi } from "api-manage";
+
+type ApiResponse<T> = {
+    code: number;
+    data: T;
+};
+
+type TokenInfo = {
+    token: string;
+};
+
+export default ({ server }: { server: string }) =>
+    ({
+        post: {
+            apiGetToken: defineApi<ApiResponse<TokenInfo>, { code: string }>(
+                `${server}/getToken`,
+            ),
+        },
+    }) as const;
+```
+
+```ts
+// service.ts
+import ApiManage from "api-manage";
+import apiList from "./api";
+import { request } from "./request";
+
+const list = apiList({ server: "/api" });
+
+const apiManage = new ApiManage<typeof list>({
     request,
-    list: ApiManage.bindApi([apiList], { server: "/api" })
+    list,
+    validate: (res) => res.code === 0,
+    limitResponse: (res) => res.data,
+});
+
+export const service = apiManage.getService();
+```
+
+```ts
+const token = await service.serveGetToken({ code: "login-code" });
+```
+
+## 兼容旧字符串清单
+
+```ts
+export default ({ server }: { server: string }) => ({
+    post: {
+        apiGetToken: `${server}/getToken`,
+    },
 });
 ```
+
+多个旧字符串清单需要运行时合并时，可以继续使用 `ApiManage.bindApi`。

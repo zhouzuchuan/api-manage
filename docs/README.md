@@ -1,122 +1,178 @@
-# api-manage
+# api-manage 3.0.0
 
-[![download](https://img.shields.io/npm/dm/api-manage.svg)](https://www.npmjs.com/search?q=api-manage)
-[![npm](https://img.shields.io/npm/v/api-manage.svg)](https://www.npmjs.com/search?q=api-manage)
-[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/zhouzuchuan/data-mock/master/LICENSE)
+`api-manage` 用一份 API 清单生成统一请求函数，帮助应用把接口地址、请求逻辑、返回处理和 TypeScript 类型集中管理。
 
-## 它是什么
+3.0.0 推荐使用类型化 API 清单：
 
--   本着约定大于配置的原则来管理应用 API 服务的解决方案
--   减少 API 服务积累带来的样板代码
--   基于[axios](https://github.com/axios/axios) 请求库，对其方法浅封装（未对方法主体封装）
+```ts
+defineApi<RawResult, Params, LimitedResult>(url)
+```
 
-## 下载
+-   `RawResult`：接口原始完整响应类型
+-   `Params`：请求参数类型
+-   `LimitedResult`：经过 `limitResponse` 处理后的业务数据类型，默认是 `LimitResult<RawResult>`
+
+## 安装
 
 ```bash
-
-# 安装
 npm install api-manage
-
-# 安装
-yarn add api-manage
-
 ```
 
-## 核心
+## 推荐用法
 
-### 1、约定
+```ts
+import ApiManage, { defineApi } from "api-manage";
 
-在 API 清单中的定义的 api 名，如 `apiGetToken`，在经过 api-manage 注入后的服务名则为`serveGetToken`。及将`api`替换成`serve`。
-
-这里主要是区别两者的含义
-
-可以通过参数来自定义规则，[点击这里](/api?id=matchstr)
-
-### 2、自动中断重复请求
-
-这个还是基于 `axios` 来实现，只在浏览器层面上中断了请求，服务器端重复请求是依然存在的
-
-### 3、API 清单
-
-是用来管理应用程序的请求 api 地址，统一管理 既方便使用也方便修改和查找
-
-api 清单格式目前分为以下两种形式
-
--   `键值对形式`
-
-    ```js
-    export default {
-        post: {
-            apiHome_GetToken: "/getToken"
-        },
-        get: {
-            apiHome_GetInfo: "/getUserInfo"
-        },
-        delete: {
-            apiHome_DeleteInfo: "/deleteInfo"
-        }
-        // 其他方法(put,...)
-    };
-    ```
-
--   `函数形式`
-
-    ```js
-    export default ({ server }) => ({
-        post: {
-            apiHome_GetToken: `${server}/getToken`
-        },
-        get: {
-            apiHome_GetInfo: `${server}/getUserInfo`
-        },
-        delete: {
-            apiHome_DeleteInfo: `${server}/deleteInfo`
-        }
-        // 其他方法(put,...)
-    });
-    ```
-
-建议采用 `函数形式` ，可以通过穿值方式来给不同 api 添加前缀，
-
-```
-PS： 切换不同开发环境也非常实用（生产环境、开发环境、mock环境等）
-```
-
-## 使用
-
-```js
-// apiList.js
-
-export default {
-    post: {
-        apiHome_GetToken: `${server}/getToken`
-    },
-    get: {
-        apiHome_GetInfo: `${server}/getUserInfo`
-    },
-    delete: {
-        apiHome_DeleteInfo: `${server}/deleteInfo`
-    }
+type ApiResponse<T> = {
+    code: number;
+    message: string;
+    data: T;
 };
-```
 
-```js
-import ApiManage from "api-manage";
-import apiList from "./apiList.js";
+type UserInfo = {
+    id: number;
+    name: string;
+};
 
-const apiManage = new ApiManage({
-    list: apiList
+type GetUserParams = {
+    id: number;
+};
+
+const apiList = {
+    get: {
+        apiGetUser: defineApi<ApiResponse<UserInfo>, GetUserParams>("/user"),
+    },
+} as const;
+
+const apiManage = new ApiManage<typeof apiList>({
+    list: apiList,
+    request: (options) => axios(options),
+    validate: (res) => res.code === 0,
+    limitResponse: (res) => res.data,
 });
 
-// 取到所有请求函数
-const service = apiManage.getService();
+const apis = apiManage.getService();
 
-// 使用
-service.serveHome_GetToken();
+const user = await apis.serveGetUser({ id: 1 });
+// user: UserInfo
+
+const raw = await apis.serveGetUser({ id: 1 }, { isLimit: false });
+// raw: ApiResponse<UserInfo>
 ```
 
-这里面的 `serveHome_GetToken` 是处理后的 请求函数名称。默认将 `^api` 替换成了 `^serve` ，主要是区分 api 和请求函数，也可以通过设置来抹平这种区别
+## 命名约定
 
-## License
+默认会把清单里的 `apiXxx` 转成请求函数 `serveXxx`：
 
-[MIT](https://tldrlegal.com/license/mit-license)
+```ts
+apiGetUser -> serveGetUser
+apiFile_Upload -> serveFile_Upload
+```
+
+可以通过 `matchStr` 和 `replaceStr` 修改这个规则。
+
+## 请求流程
+
+一个请求会按下面的顺序执行：
+
+```text
+serveXxx(params, options)
+  -> hooks.start
+  -> request
+  -> validate
+  -> hooks.resolve
+  -> limitResponse / raw response
+  -> hooks.finally
+```
+
+失败时会触发 `hooks.reject`，然后继续触发 `hooks.finally`。
+
+## API 清单格式
+
+### 类型化清单
+
+```ts
+const apiList = {
+    post: {
+        apiCreateUser: defineApi<ApiResponse<UserInfo>, { name: string }>(
+            "/user",
+        ),
+    },
+} as const;
+```
+
+### 函数式清单
+
+```ts
+export default ({ server }: { server: string }) =>
+    ({
+        get: {
+            apiGetUser: defineApi<ApiResponse<UserInfo>, { id: number }>(
+                `${server}/user`,
+            ),
+        },
+    }) as const;
+```
+
+### 兼容旧字符串清单
+
+```ts
+const apiList = {
+    get: {
+        apiGetUser: "/user",
+    },
+} as const;
+```
+
+旧清单仍可通过 `getService<ResultMap, ParamsMap>()` 补充类型，详见[类型系统](/deep/types.md)。
+
+## 路径模板
+
+路径中以 `:` 开头的片段会从 `tplData` 中取值：
+
+```ts
+const apiList = {
+    get: {
+        apiGetUser: defineApi<ApiResponse<UserInfo>, { keyword: string }>(
+            "/user/:id",
+        ),
+    },
+} as const;
+
+await apis.serveGetUser(
+    { keyword: "tom" },
+    { tplData: { id: 1 } },
+);
+```
+
+`tplData` 类型是 `TemplateData`：`string | number | Array<string | number> | Record<string, string | number>`。
+
+## 动态请求
+
+运行时才拿到的地址，不需要塞回 `list`：
+
+```ts
+const data = await apiManage.call<UserInfo>({
+    url: "/runtime/:id/detail",
+    method: "post",
+    data: { userId: 1 },
+    tplData: { id: "abc" },
+    serveName: "runtimeDetail",
+});
+```
+
+## Demo
+
+```bash
+npm run demo
+npm run start:playground
+```
+
+可视化示例见[可视化 Playground](/demo/playground.md)。
+
+## 深入阅读
+
+-   [API 参考](/api.md)
+-   [类型系统](/deep/types.md)
+-   [运行时流程](/deep/runtime.md)
+-   [版本更新](/deep/version.md)

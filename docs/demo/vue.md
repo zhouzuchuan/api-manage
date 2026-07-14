@@ -1,35 +1,68 @@
-## VUE 使用案例
+# Vue 使用案例
 
-```js
-// api.js
-export default ({ server }) => {
-    post: {
-        apiGetToken: `${server}/getToken`;
-    }
+## 推荐写法
+
+```ts
+// api.ts
+import { defineApi } from "api-manage";
+
+type ApiResponse<T> = {
+    code: number;
+    data: T;
 };
+
+type TokenInfo = {
+    token: string;
+};
+
+export default ({ server }: { server: string }) =>
+    ({
+        post: {
+            apiGetToken: defineApi<ApiResponse<TokenInfo>, { code: string }>(
+                `${server}/getToken`,
+            ),
+        },
+    }) as const;
 ```
 
-```js
-// 入口 index.js
-import Vue from "vue";
+```ts
+// service.ts
 import ApiManage from "api-manage";
-
 import apiList from "./api";
+import request from "./request";
 
-// 注入api清单
-Vue.prototype.$service = new apiManage({
-    list: ApiManage.bindApi([apiList], { server: "/api" })
+const list = apiList({ server: "/api" });
+
+const apiManage = new ApiManage<typeof list>({
+    request,
+    list,
+    validate: (res) => res.code === 0,
+    limitResponse: (res) => res.data,
 });
 
-// ...
+export const service = apiManage.getService();
 ```
 
-```js
-// 子组件中方法调用
+```ts
+// 组件中使用
+import { service } from "./service";
 
 export default {
-    created() {
-        this.$service.serveGetToken(); // 调用方法
-    }
+    async created() {
+        const token = await service.serveGetToken({ code: "login-code" });
+        console.log(token.token);
+    },
 };
 ```
+
+## 兼容旧字符串清单
+
+```ts
+export default ({ server }: { server: string }) => ({
+    post: {
+        apiGetToken: `${server}/getToken`,
+    },
+});
+```
+
+多个旧字符串清单需要运行时合并时，可以继续使用 `ApiManage.bindApi`。
