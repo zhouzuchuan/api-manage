@@ -100,6 +100,82 @@ apis.serveGetUser({ id: 1 }, { isLimit: false });
 apis.serveGetUser<ApiResponse<UserInfo>>({ id: 1 }, options);
 ```
 
+## 请求函数名类型
+
+请求函数名会从 `List` 自动推导，默认规则是 `apiXxx -> serveXxx`。`getService()`、`abort()`、`resolve()`、hooks、`validate()`、`limitResponse()` 使用同一组 service name 类型。
+
+```ts
+apiManage.abort("serveGetUser");
+apiManage.resolve("serveGetUser");
+
+// resolve(data) 会复用接口 params 类型
+apis.serveGetUser.resolve({ id: 1 });
+```
+
+自定义 `matchStr / replaceStr` 时，需要传入字面量泛型：
+
+```ts
+const apiManage = new ApiManage<
+    typeof apiList,
+    {},
+    unknown,
+    "api",
+    "request"
+>({
+    request,
+    list: apiList,
+    matchStr: "api",
+    replaceStr: "request",
+});
+
+const apis = apiManage.getService();
+apis.requestGetUser({ id: 1 });
+```
+
+## 扩展请求 options 类型
+
+`api-manage` 不内置 `headers`、`responseType` 等具体请求库字段。请求函数第二个参数可以通过 `ExtraOptions` 泛型扩展；声明后会进入白名单模式：
+
+```ts
+type ApiRequestOptions = {
+    headers?: Record<string, string | number | boolean | null | undefined>;
+    responseType?: "json" | "blob" | "arraybuffer";
+    timeout?: number;
+};
+
+const apiList = ApiManage.bindApi(Object.values(apiFiles), serverParams);
+
+const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        service({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+});
+
+const apis = apiManage.getService();
+
+await apis.serveGetUser(
+    { id: 1 },
+    {
+        headers: { jsonContent: true },
+        timeout: 10000,
+        cancelParams: { includeConfigKeys: ["headers"] },
+    },
+);
+```
+
+需要补充旧字符串清单的返回和参数类型时，仍然在 `getService` 上声明 `ResultMap`、`ParamsMap`：
+
+```ts
+const apis = apiManage.getService<ResultMap, ParamsMap>();
+```
+
+未传 `ExtraOptions` 时只能使用内置字段。业务想传新的请求配置字段时，需要显式加入 `ApiRequestOptions`。
+
 ## 旧字符串清单类型
 
 旧清单仍支持：
@@ -131,16 +207,25 @@ const apis = apiManage.getService<ResultMap, ParamsMap>();
 ## 多文件类型
 
 ```ts
-import type { ApiFilesServiceMap } from "api-manage";
-
 const apiFiles = {
     userApi,
     fileApi,
 };
 
-type Services = ApiFilesServiceMap<typeof apiFiles>;
+const apiList = ApiManage.bindApi(Object.values(apiFiles), serverParams);
 
-const apis = apiManage.getService() as Services;
+const apiManage = new ApiManage<typeof apiList>({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        service({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+});
+
+const apis = apiManage.getService();
 ```
 
 ## 常用导出类型
@@ -151,9 +236,10 @@ import type {
     ApiFilesServiceMap,
     ApiList,
     ApiServiceMap,
+    ApiRequestContextByList,
     DynamicRequestOptions,
     LimitResult,
-    RequestOptions,
+    RequestContext,
     ResolvedRequest,
     ServeFnOptions,
     ServeFunction,
@@ -165,9 +251,10 @@ import type {
 -   `ApiList`：API 清单类型
 -   `ApiServiceMap`：单个清单生成的 service map 类型
 -   `ApiFilesServiceMap`：多个清单合并后的 service map 类型
+-   `RequestContext`：`request` 第三个参数的基础上下文类型
+-   `ApiRequestContextByList`：根据清单推导出来的请求上下文 union
 -   `ServeFunction`：请求函数类型
--   `ServeFnOptions`：请求函数第二个参数类型
+-   `ServeFnOptions<ExtraOptions>`：请求函数第二个参数类型
 -   `TemplateData`：路径模板数据类型
--   `RequestOptions`：`request` 接收的参数类型
 -   `DynamicRequestOptions`：`call` 接收的参数类型
 -   `ResolvedRequest`：`resolve` 返回的解析结果类型

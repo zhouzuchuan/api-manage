@@ -6,7 +6,7 @@
 
 ```text
 serveXxx(params, options)
-  -> 计算 URL 和 params/data
+  -> 计算 URL 和 context
   -> 计算取消 token
   -> hooks.start
   -> request
@@ -25,27 +25,24 @@ request/validate 失败
   -> throw error
 ```
 
-## 参数分发
+## 请求 adapter
 
-默认规则：
-
--   `get`：请求参数进入 `params`
--   其他 method：请求参数进入 `data`
+`api-manage` 不再内置 axios 风格的 `params/data` 分发。请求函数会收到：
 
 ```ts
-await apis.serveGetUser({ id: 1 });
-// request({ method: "get", url: "/user", params: { id: 1 } })
-
-await apis.serveCreateUser({ name: "Tom" });
-// request({ method: "post", url: "/user", data: { name: "Tom" } })
+request(url, method, context, extraOptions)
 ```
 
-可以通过 `methodsForDataKeyNames` 修改：
+业务 adapter 自己决定如何把 `context.params` 映射给请求库：
 
 ```ts
-methodsForDataKeyNames: {
-    get: "params",
-    post: "body",
+request: (url, method, context, extraOptions) => {
+    return service({
+        ...extraOptions,
+        url,
+        method,
+        [method === "get" ? "params" : "data"]: context.params,
+    });
 }
 ```
 
@@ -69,11 +66,15 @@ await apis.serveGetUser(
 `request` 最终收到：
 
 ```ts
-{
-    method: "get",
-    url: "/user/1",
-    params: { keyword: "tom" },
-}
+request(
+    "/user/1",
+    "get",
+    {
+        serveName: "serveGetUser",
+        params: { keyword: "tom" },
+    },
+    extraOptions,
+);
 ```
 
 ## `validate` 与 `limitResponse`
@@ -109,10 +110,10 @@ const raw = await apis.serveGetUser({ id: 1 }, { isLimit: false });
 const data = await apiManage.call<UserInfo>({
     url: "/runtime/:id/detail",
     method: "post",
-    data: { userId: 1 },
+    params: { userId: 1 },
     tplData: { id: "abc" },
     serveName: "runtimeDetail",
-    config: {
+    extraOptions: {
         headers: { noEncrypt: true },
     },
 });
@@ -122,7 +123,18 @@ const data = await apiManage.call<UserInfo>({
 
 ## 取消重复请求
 
-当配置了 `CancelRequest` 时，默认会取消相同 URL 和参数的上一个请求，只保留最后一个。
+当配置了 `cancel` 时，默认会取消相同 URL、method 和参数的上一个请求，只保留最后一个。
+
+```ts
+cancel: () => {
+    const controller = new AbortController();
+
+    return {
+        cancel: () => controller.abort(),
+        extraOptions: { signal: controller.signal },
+    };
+}
+```
 
 ```ts
 const first = apis.serveGetUser({ id: 1 });

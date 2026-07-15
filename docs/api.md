@@ -11,7 +11,7 @@ const apiManage = new ApiManage({
     limitResponse,
     validate,
     hooks,
-    CancelRequest,
+    cancel,
 });
 ```
 
@@ -61,23 +61,37 @@ export default ({ server }: { server: string }) =>
 
 ### `request` 必填
 
-真正执行请求的函数。它必须接受一个对象，至少包含 `url`、`method`，并按方法接收 `params` 或 `data`。
+真正执行请求的函数。`api-manage` 只传递通用请求信息，不绑定 axios、fetch 或其他请求库。
 
 ```ts
 const apiManage = new ApiManage<typeof apiList>({
     list: apiList,
-    request: (options) => axios(options),
+    request: (url, method, context, extraOptions) =>
+        axios({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
 });
 ```
 
-GET 默认把参数放到 `params`，其他方法默认放到 `data`：
+`context.serveName` 和 `context.params` 会根据 `defineApi` 建立类型关系。需要按请求库格式传参时，在业务 adapter 中自行转换：
 
 ```ts
-serveGetUser({ id: 1 });
-// request({ method: "get", url: "/user", params: { id: 1 } })
+request: (url, method, context, extraOptions) => {
+    if (context.serveName === "serveGetUser") {
+        context.params;
+        // GetUserParams
+    }
 
-serveCreateUser({ name: "Tom" });
-// request({ method: "post", url: "/user", data: { name: "Tom" } })
+    return service({
+        ...extraOptions,
+        url,
+        method,
+        [method === "get" ? "params" : "data"]: context.params,
+    });
+}
 ```
 
 ### `limitResponse`
@@ -135,27 +149,47 @@ hooks: {
 -   `reject`：请求失败或 `validate` 返回 `false`
 -   `finally`：成功或失败都会触发
 
-### `CancelRequest`
+### `cancel`
 
-取消请求构造函数。常见场景是接入 axios CancelToken，用于取消重复请求。
+创建通用取消请求处理。`api-manage` 负责识别重复请求并调用上一次请求保存的 `cancel(message)`；具体如何接入 axios `CancelToken`、`AbortController` 或其他请求库，由业务 adapter 决定。
 
 ```ts
-const apiManage = new ApiManage({
-    list,
-    request: axios,
-    CancelRequest: axios.CancelToken,
+type ApiRequestOptions = {
+    cancelToken?: unknown;
+};
+
+const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        axios({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+    cancel: () => {
+        let cancel!: (message?: any) => void;
+        const cancelToken = new axios.CancelToken((fn) => {
+            cancel = fn;
+        });
+
+        return {
+            cancel,
+            extraOptions: { cancelToken },
+        };
+    },
 });
 ```
 
-默认会按 `url + params/data` 计算取消 token。可以通过 `cancelParams` 调整。
+默认会按 `url + method + context.params` 计算取消 token。可以通过 `cancelParams` 调整。
 
 ### `matchStr` / `replaceStr`
 
 控制接口名到请求函数名的转换。
 
 ```ts
-new ApiManage({
-    list,
+const apiManage = new ApiManage<typeof apiList>({
+    list: apiList,
     request,
     matchStr: "api",
     replaceStr: "serve",
@@ -168,32 +202,28 @@ new ApiManage({
 apiGetUser -> serveGetUser
 ```
 
-### `defaultMethodNames`
-
-默认支持的 HTTP 方法：
+自定义转换规则时，建议把 `matchStr / replaceStr` 字面量类型传给 `ApiManage`，这样 `getService()`、`abort()`、`resolve()` 和回调里的 `serveName` 会同步变化：
 
 ```ts
-["get", "post", "put", "delete"]
+const apiManage = new ApiManage<
+    typeof apiList,
+    {},
+    unknown,
+    "api",
+    "request"
+>({
+    list: apiList,
+    request,
+    matchStr: "api",
+    replaceStr: "request",
+});
+
+const apis = apiManage.getService();
+await apis.requestGetUser({ id: 1 });
+apiManage.abort("requestGetUser");
 ```
 
-如果需要支持更多方法：
-
-```ts
-defaultMethodNames: ["get", "post", "patch", "delete"];
-```
-
-### `methodsForDataKeyNames`
-
-配置不同方法的参数字段名。
-
-```ts
-methodsForDataKeyNames: {
-    get: "params",
-    post: "data",
-}
-```
-
-默认只有 `get` 使用 `params`，其他方法使用 `data`。
+清单里出现的任意 method key 都会默认生成请求函数。是否把它解释为 HTTP method、上传动作或其他业务动作，由 `request` adapter 决定。
 
 ### `customize`
 
@@ -219,6 +249,8 @@ customize: {
 ```ts
 const apis = apiManage.getService();
 await apis.serveGetUser({ id: 1 });
+apiManage.abort("serveGetUser");
+apiManage.resolve("serveGetUser");
 ```
 
 旧字符串清单可以通过泛型补充类型：
@@ -235,6 +267,38 @@ type ParamsMap = {
 const apis = apiManage.getService<ResultMap, ParamsMap>();
 ```
 
+请求函数第二个参数通过 `new ApiManage<List, ExtraOptions>()` 扩展。声明后会进入白名单模式，只允许内置字段和业务显式声明的字段：
+
+```ts
+type ExtraOptions = {
+    headers?: Record<string, string | number | boolean | null | undefined>;
+    responseType?: "json" | "blob" | "arraybuffer";
+    timeout?: number;
+};
+
+const apiManage = new ApiManage<typeof apiList, ExtraOptions>({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        service({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+});
+
+const apis = apiManage.getService<ResultMap, ParamsMap>();
+
+await apis.serveGetUser(
+    { id: 1 },
+    {
+        headers: { jsonContent: true },
+        timeout: 10000,
+        cancelParams: { includeConfigKeys: ["headers"] },
+    },
+);
+```
+
 ### `call<R>()`
 
 运行时动态请求。适合接口地址不是初始化时已知的场景。
@@ -243,10 +307,10 @@ const apis = apiManage.getService<ResultMap, ParamsMap>();
 const result = await apiManage.call<UserInfo>({
     url: "/runtime/:id/detail",
     method: "post",
-    data: { userId: 1 },
+    params: { userId: 1 },
     tplData: { id: "abc" },
     serveName: "runtimeDetail",
-    config: {
+    extraOptions: {
         headers: { noEncrypt: true },
     },
 });
@@ -348,7 +412,10 @@ ApiManage.replaceFnName("apiGetUser", "api", "serve");
 ApiManage.createCancelToken({
     method: "get",
     url: "/user",
-    params: { id: 1 },
+    context: {
+        serveName: "serveGetUser",
+        params: { id: 1 },
+    },
 });
 ```
 
@@ -363,21 +430,37 @@ await apis.serveGetUser({ id: 1 });
 `options` 支持：
 
 ```ts
-type ServeFnOptions = {
+type ServeFnOptions<ExtraOptions extends Record<string, any> = {}> = {
     tplData?: TemplateData;
     cancelParams?: {
         isCalcFullPath?: boolean;
         open?: boolean;
+        includeConfigKeys?: Array<Extract<keyof ExtraOptions, string>>;
     };
     isLimit?: boolean;
-} & Record<string, any>;
+} & ExtraOptions;
 ```
 
 -   `tplData`：路径模板数据
 -   `cancelParams.open`：是否开启重复请求取消，默认 `true`
 -   `cancelParams.isCalcFullPath`：取消 token 是否包含参数，默认 `true`
+-   `cancelParams.includeConfigKeys`：额外参与取消 token 计算的配置 key，只能使用 `ExtraOptions` 中声明过的 key，例如 `["headers"]`
 -   `isLimit`：是否返回 `limitResponse` 后的数据，默认 `true`
--   其他字段会透传到 `request`，例如 `headers`
+-   `ExtraOptions`：业务侧扩展字段，会作为 `request` 第四参透传，例如 `headers`、`timeout`
+
+不传 `ExtraOptions` 时只能使用内置字段。业务侧需要传 `headers`、`timeout` 等配置时，需要在 `new ApiManage<List, ExtraOptions>()` 中显式声明。
+
+默认取消 token 只按 `url + method + context.params` 计算；如果业务上同参数但不同 `headers` 应视为不同请求，可以显式开启：
+
+```ts
+await apis.serveGetUser(
+    { id: 1 },
+    {
+        headers: { jsonContent: true },
+        cancelParams: { includeConfigKeys: ["headers"] },
+    },
+);
+```
 
 ### `serveXxx.resolve(params, tplData)`
 

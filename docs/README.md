@@ -46,7 +46,13 @@ const apiList = {
 
 const apiManage = new ApiManage<typeof apiList>({
     list: apiList,
-    request: (options) => axios(options),
+    request: (url, method, context, extraOptions) =>
+        axios({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
     validate: (res) => res.code === 0,
     limitResponse: (res) => res.data,
 });
@@ -126,6 +132,28 @@ const apiList = {
 
 旧清单仍可通过 `getService<ResultMap, ParamsMap>()` 补充类型，详见[类型系统](/deep/types.md)。
 
+请求函数第二个参数可通过 `ExtraOptions` 扩展。声明后会进入白名单模式，只允许内置字段和业务显式声明的字段：
+
+```ts
+type ApiRequestOptions = {
+    headers?: Record<string, string | number | boolean | null | undefined>;
+    timeout?: number;
+};
+
+const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        axios({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+});
+
+const apis = apiManage.getService<ResultMap, ParamsMap>();
+```
+
 ## 路径模板
 
 路径中以 `:` 开头的片段会从 `tplData` 中取值：
@@ -155,7 +183,7 @@ await apis.serveGetUser(
 const data = await apiManage.call<UserInfo>({
     url: "/runtime/:id/detail",
     method: "post",
-    data: { userId: 1 },
+    params: { userId: 1 },
     tplData: { id: "abc" },
     serveName: "runtimeDetail",
 });

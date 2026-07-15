@@ -91,10 +91,10 @@ const rawUser = await apis.serveGetUser(
 const data = await apiManage.call<DemoPayload>({
     url: "/runtime/:id/detail",
     method: "post",
-    data: { userId: 1 },
+    params: { userId: 1 },
     tplData: { id: "abc" },
     serveName: "runtimeDetail",
-    config: {
+    extraOptions: {
         headers: {
             noEncrypt: true,
         },
@@ -127,15 +127,33 @@ const apis = apiManage.getService<ResultMap, ParamsMap>();
 ## 多 API 文件类型
 
 ```ts
-import type { ApiFilesServiceMap } from "api-manage";
-
 const apiFiles = {
     userApi,
     teamApi,
     fileApi,
 };
 
-type Services = ApiFilesServiceMap<typeof apiFiles>;
+type ApiRequestOptions = {
+    headers?: Record<string, string | number | boolean | null | undefined>;
+    responseType?: "json" | "blob" | "arraybuffer";
+    timeout?: number;
+};
 
-export const useApis = () => apiManage.getService() as Services;
+const apiList = ApiManage.bindApi(Object.values(apiFiles), serverParams);
+
+export const apiManage = new ApiManage<
+    typeof apiList,
+    ApiRequestOptions
+>({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        service({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+});
+
+export const useApis = () => apiManage.getService();
 ```

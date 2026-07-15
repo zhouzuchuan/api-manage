@@ -96,19 +96,54 @@ export type ApiToServeName<
         : never
     : never
 
-export type ServeFnOptions = {
+type ApiFileInput = ApiList | AnyFunction
+type ApiFileToList<T> = T extends AnyFunction ? ReturnType<T> : T
+type BindApiList<Input> = UnionToIntersection<
+    Extract<
+        ApiFileToList<Input extends readonly (infer Item)[] ? Item : Input>,
+        ApiList
+    >
+>
+type ApiServeName<
+    List extends ApiList,
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
+> = ApiToServeName<UnionKeys<List[keyof List]>, MatchStr, ReplaceStr>
+type ApiMethodName<List extends ApiList> = Extract<keyof List, string>
+type RequestContextByApiName<
+    List extends ApiList,
+    Name extends PropertyKey,
+    MatchStr extends string,
+    ReplaceStr extends string,
+> = ApiToServeName<Name, MatchStr, ReplaceStr> extends infer ServeName
+    ? ServeName extends string
+        ? RequestContext<
+              ApiItemByName<List, Name> extends ApiDefine<any, infer P, any>
+                  ? P
+                  : any,
+              ServeName
+          >
+        : never
+    : never
+type CancelParams<ExtraOptions extends Record<string, any> = {}> = {
+    /** 是否是计算全部路径 */
+    isCalcFullPath?: boolean
+    /** 当前函数是否开启取消重复请求功能 */
+    open?: boolean
+    /** 参与取消 token 计算的请求配置 key，例如 headers */
+    includeConfigKeys?: Array<Extract<keyof ExtraOptions, string>>
+}
+
+export type ServeFnOptions<
+    ExtraOptions extends Record<string, any> = {},
+> = {
     /** 模板数据 */
     tplData?: TemplateData
     /** 取消函数请求配置 */
-    cancelParams?: {
-        /** 是否是计算全部路径 */
-        isCalcFullPath?: boolean
-        /** 当前函数是否开启取消重复请求功能 */
-        open?: boolean
-    }
+    cancelParams?: CancelParams<ExtraOptions>
     /** 当前函数是否开启数据截取功能 */
     isLimit?: boolean
-} & Record<string, any>
+} & ExtraOptions
 
 export type ResolvedRequest = {
     url?: string
@@ -127,20 +162,21 @@ export type ServeFunction<
     RawResult = unknown,
     Params = any,
     LimitedResult = LimitResult<RawResult>,
+    ExtraOptions extends Record<string, any> = {},
 > = {
     (
         data?: Params,
-        options?: ServeFnOptions & { isLimit?: true },
+        options?: ServeFnOptions<ExtraOptions> & { isLimit?: true },
     ): Promise<LimitedResult>
     (
         data: Params | undefined,
-        options: ServeFnOptions & { isLimit: false },
+        options: ServeFnOptions<ExtraOptions> & { isLimit: false },
     ): Promise<RawResult>
-    <R = LimitedResult>(data?: Params, options?: ServeFnOptions): Promise<R>
-    resolve: (
-        data?: Record<string, any>,
-        tplData?: ServeFnOptions['tplData'],
-    ) => ResolvedRequest
+    <R = LimitedResult>(
+        data?: Params,
+        options?: ServeFnOptions<ExtraOptions>,
+    ): Promise<R>
+    resolve: (data?: Params, tplData?: TemplateData) => ResolvedRequest
     abort: () => void
 }
 
@@ -152,6 +188,7 @@ export type ApiServiceMap<
     ReplaceStr extends string = 'serve',
     ResultMap extends Record<string, any> = {},
     ParamsMap extends Record<string, any> = {},
+    ExtraOptions extends Record<string, any> = {},
 > = {
     [Name in UnionKeys<List[keyof List]> as ApiToServeName<
         Name,
@@ -178,21 +215,30 @@ export type ApiServiceMap<
             ApiToServeName<Name, MatchStr, ReplaceStr>,
             Result,
             ResultMap
-        >
+        >,
+        ExtraOptions
     >
 }
 
-type ApiFileToList<T> = T extends AnyFunction ? ReturnType<T> : T
-type ApiFileServiceMap<T, Result, ResultMap, ParamsMap> =
+type ApiFileServiceMap<
+    T,
+    Result,
+    ResultMap,
+    ParamsMap,
+    ExtraOptions extends Record<string, any>,
+    MatchStr extends string,
+    ReplaceStr extends string,
+> =
     T extends ApiList | AnyFunction
         ? ApiServiceMap<
               Extract<ApiFileToList<T>, ApiList>,
               Result,
               any,
-              'api',
-              'serve',
+              MatchStr,
+              ReplaceStr,
               Extract<ResultMap, Record<string, any>>,
-              Extract<ParamsMap, Record<string, any>>
+              Extract<ParamsMap, Record<string, any>>,
+              ExtraOptions
           >
     : never
 
@@ -201,97 +247,169 @@ export type ApiFilesServiceMap<
     Result = unknown,
     ResultMap extends Record<string, any> = {},
     ParamsMap extends Record<string, any> = {},
+    ExtraOptions extends Record<string, any> = {},
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
 > = UnionToIntersection<
-    ApiFileServiceMap<Files[keyof Files], Result, ResultMap, ParamsMap>
+    ApiFileServiceMap<
+        Files[keyof Files],
+        Result,
+        ResultMap,
+        ParamsMap,
+        ExtraOptions,
+        MatchStr,
+        ReplaceStr
+    >
 >
 
-export type RequestOptions = {
-    /** 开发者服务器接口地址 */
-    url: string
-    /** HTTP 请求方法 */
-    method?: string
-    /** 请求的参数 */
-    data?: any
-} & Record<string, any>
+export type RequestContext<
+    Params = unknown,
+    ServeName extends string = string,
+> = {
+    serveName: ServeName
+    params?: Params
+}
 
-export type DynamicRequestOptions = {
+export type ApiRequestContextByList<
+    List extends ApiList,
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
+> = UnionKeys<List[keyof List]> extends infer Name
+    ? Name extends PropertyKey
+        ? RequestContextByApiName<List, Name, MatchStr, ReplaceStr>
+        : never
+    : never
+
+export type DynamicRequestOptions<
+    ExtraOptions extends Record<string, any> = {},
+> = {
     url: string
     method?: string
-    data?: any
+    params?: any
     tplData?: TemplateData
     serveName?: string
     isLimit?: boolean
-    cancelParams?: ServeFnOptions['cancelParams']
-    config?: Record<string, any>
+    cancelParams?: CancelParams<ExtraOptions>
+    extraOptions?: ExtraOptions
 }
 
-type Hooks = {
+type CancelResult<ExtraOptions extends Record<string, any>> =
+    | {
+          cancel: (message?: any) => void
+          extraOptions?: Partial<ExtraOptions>
+      }
+    | void
+
+type CancelTokenOptions<ExtraOptions extends Record<string, any>> = {
+    url: string
+    method?: string
+    context: RequestContext<any, string>
+    extraOptions?: ExtraOptions
+}
+
+type Hooks<ServeName extends string = string> = {
     /** 请求前 */
-    start?: (serveName?: string, timestamp?: string) => MaybePromise<void>
+    start?: (serveName?: ServeName, timestamp?: string) => MaybePromise<void>
     /** 请求成功 触发 */
-    resolve?: (serveName?: string, timestamp?: string) => MaybePromise<void>
+    resolve?: (serveName?: ServeName, timestamp?: string) => MaybePromise<void>
     /** 请求失败 触发 */
     reject?: (
-        serveName?: string,
+        serveName?: ServeName,
         timestamp?: string,
         error?: any,
     ) => MaybePromise<void>
     /** 请求成功和失败 都触发 */
-    finally?: (serveName?: string, timestamp?: string) => MaybePromise<void>
+    finally?: (serveName?: ServeName, timestamp?: string) => MaybePromise<void>
 }
 
-export interface ApiManageOptions<List extends ApiList = ApiList>
+export interface ApiManageOptions<
+    List extends ApiList = ApiList,
+    ExtraOptions extends Record<string, any> = {},
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
+>
     extends Partial<{
-        matchStr: string
-        replaceStr: string
+        matchStr: MatchStr
+        replaceStr: ReplaceStr
     }> {
     /** api清单 */
     list: List
     /** 请求函数 */
-    request: (options: RequestOptions) => any
-    /** 处理 response 的数据格式 */
-    limitResponse?: (res: any, serveName?: string) => any
-    /** 验证请求结果是否通过 */
-    validate?: (response?: any, serveName?: string) => MaybePromise<boolean>
-    /** 自定义请求 函数处理 */
-    customize?: Record<
-        string,
-        (path?: string, serveName?: string) => ServeFunction
-    >
-    /** 取消请求构造函数 */
-    CancelRequest?: new (
-        fn: (cancelFn: (message?: any) => void) => void,
+    request: (
+        url: string,
+        method: ApiMethodName<List>,
+        context: ApiRequestContextByList<List, MatchStr, ReplaceStr>,
+        extraOptions?: ExtraOptions,
     ) => any
+    /** 处理 response 的数据格式 */
+    limitResponse?: (
+        res: any,
+        serveName?: ApiServeName<List, MatchStr, ReplaceStr>,
+    ) => any
+    /** 验证请求结果是否通过 */
+    validate?: (
+        response?: any,
+        serveName?: ApiServeName<List, MatchStr, ReplaceStr>,
+    ) => MaybePromise<boolean>
+    /** 自定义请求 函数处理 */
+    customize?: Partial<
+        Record<
+            ApiMethodName<List>,
+            (
+                path?: string,
+                serveName?: ApiServeName<List, MatchStr, ReplaceStr>,
+            ) => ServeFunction<any, any, any, ExtraOptions>
+        >
+    >
+    /** 创建通用取消请求处理 */
+    cancel?: (
+        url: string,
+        method: ApiMethodName<List>,
+        context: ApiRequestContextByList<List, MatchStr, ReplaceStr>,
+        extraOptions?: ExtraOptions,
+    ) => CancelResult<ExtraOptions>
     /** 钩子函数 */
-    hooks?: Hooks
-    /** 默认支持的请求方法 */
-    defaultMethodNames?: string[]
-    /** 不同方法 对应传递参数的 key 集合 默认的传参 key 为 data */
-    methodsForDataKeyNames?: Record<string, string>
+    hooks?: Hooks<ApiServeName<List, MatchStr, ReplaceStr>>
 }
 
-type FullApiManageOptions<List extends ApiList> = Required<
+type FullApiManageOptions<
+    List extends ApiList,
+    ExtraOptions extends Record<string, any>,
+    MatchStr extends string,
+    ReplaceStr extends string,
+> = Required<
     Omit<
-        ApiManageOptions<List>,
-        'CancelRequest' | 'hooks' | 'customize' | 'limitResponse' | 'validate'
+        ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>,
+        'cancel' | 'hooks' | 'customize' | 'limitResponse' | 'validate'
     >
 > & {
-    CancelRequest?: ApiManageOptions<List>['CancelRequest']
-    hooks: Hooks
-    customize: NonNullable<ApiManageOptions<List>['customize']>
-    limitResponse: NonNullable<ApiManageOptions<List>['limitResponse']>
-    validate: NonNullable<ApiManageOptions<List>['validate']>
+    cancel?: ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>['cancel']
+    hooks: Hooks<ApiServeName<List, MatchStr, ReplaceStr>>
+    customize: NonNullable<
+        ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>['customize']
+    >
+    limitResponse: NonNullable<
+        ApiManageOptions<
+            List,
+            ExtraOptions,
+            MatchStr,
+            ReplaceStr
+        >['limitResponse']
+    >
+    validate: NonNullable<
+        ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>['validate']
+    >
 }
 
-type ExecuteRequestParams = {
+type ExecuteRequestParams<ExtraOptions extends Record<string, any>> = {
     method: string
     path: string
     serveName: string
     params?: any
-    tplData?: ServeFnOptions['tplData']
-    cancelParams?: ServeFnOptions['cancelParams']
+    tplData?: TemplateData
+    cancelParams?: CancelParams<ExtraOptions>
     isLimit?: boolean
-    config?: Record<string, any>
+    extraOptions?: ExtraOptions
 }
 
 const getType = (obj: any) =>
@@ -307,7 +425,13 @@ export const defineApi = <
     url: string,
 ): ApiDefine<RawResult, Params, LimitedResult> => ({ url })
 
-class ApiManage<List extends ApiList = ApiList, Result = unknown> {
+class ApiManage<
+    List extends ApiList = ApiList,
+    ExtraOptions extends Record<string, any> = {},
+    Result = unknown,
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
+> {
     /**
      * 将多个api清单文件 合并成一个
      *
@@ -315,24 +439,32 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
      * @param {*} params api如果是函数 则为参数传入该函数中
      * @returns {ApiList}
      */
-    static bindApi = (fns: any[], params?: any): ApiList =>
-        (Array.isArray(fns) ? fns : [fns]).reduce((r, v) => {
-            // 如果不是函数以及键值对 则过滤
-            if (!(isFunction(v) || isObject(v))) return r
-            // 如果是函数 则执行并将params传入参数
-            const result = isFunction(v) ? v(params) : v
+    static bindApi = <Input extends ApiFileInput | readonly ApiFileInput[]>(
+        fns: Input,
+        params?: any,
+    ): BindApiList<Input> =>
+        ((Array.isArray(fns) ? fns : [fns]) as ApiFileInput[]).reduce(
+            (r: ApiList, v) => {
+                // 如果不是函数以及键值对 则过滤
+                if (!(isFunction(v) || isObject(v))) return r
+                // 如果是函数 则执行并将params传入参数
+                const result = isFunction(v) ? (v as AnyFunction)(params) : v
 
-            // 如果返回的不是对象键值对 则过滤
-            if (!isObject(result)) return r
+                // 如果返回的不是对象键值对 则过滤
+                if (!isObject(result)) return r
 
-            return Object.entries(result).reduce(
-                (r2, [n, m]: any) => ({
-                    ...r2,
-                    ...(isObject(m) && { [n]: { ...(r2[n] || {}), ...m } }),
-                }),
-                r,
-            )
-        }, {})
+                return Object.entries(result).reduce(
+                    (r2, [n, m]: any) => ({
+                        ...r2,
+                        ...(isObject(m) && {
+                            [n]: { ...(r2[n] || {}), ...m },
+                        }),
+                    }),
+                    r,
+                )
+            },
+            {},
+        ) as BindApiList<Input>
 
     /**
      * 计算中断函数唯一token
@@ -341,23 +473,47 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
      * @param {*} cancelParams 取消请求配置
      * @returns
      */
-    static createCancelToken = (
-        requestParams: RequestOptions,
-        cancelParams: ServeFnOptions['cancelParams'] | boolean = {},
+    static createCancelToken = <
+        ExtraOptions extends Record<string, any> = Record<string, any>,
+    >(
+        requestParams: CancelTokenOptions<ExtraOptions>,
+        cancelParams: CancelParams<ExtraOptions> | boolean = {},
     ): string => {
-        const { method, url, params = {}, data = {} } = requestParams
+        const {
+            method,
+            url,
+            context,
+            extraOptions = {} as ExtraOptions,
+        } = requestParams
         const isCalcFullPath =
             typeof cancelParams === 'boolean'
                 ? true
                 : cancelParams?.isCalcFullPath ?? true
+        const includeConfigKeys =
+            typeof cancelParams === 'boolean'
+                ? []
+                : cancelParams?.includeConfigKeys ?? []
+        const includedConfig = includeConfigKeys.reduce(
+            (result: Record<string, any>, key) => {
+                if (Reflect.has(extraOptions, key)) {
+                    result[key] = ApiManage.sortValue(extraOptions[key])
+                }
+                return result
+            },
+            {},
+        )
 
         return isCalcFullPath
             ? encodeURIComponent(
                   url +
                       JSON.stringify(
-                          method === 'get'
-                              ? { params: ApiManage.sortValue(params) }
-                              : { data: ApiManage.sortValue(data) },
+                          {
+                              method,
+                              params: ApiManage.sortValue(
+                                  context?.params ?? {},
+                              ),
+                              ...includedConfig,
+                          },
                       ),
               )
             : url
@@ -461,7 +617,7 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
         {
             path: string
             method: string
-            serveFn: ServeFunction
+            serveFn: ServeFunction<any, any, any, ExtraOptions>
         }
     > = {}
 
@@ -473,9 +629,16 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
         [(message?: any) => void, string]
     > = {}
 
-    private options: FullApiManageOptions<List>
+    private options: FullApiManageOptions<
+        List,
+        ExtraOptions,
+        MatchStr,
+        ReplaceStr
+    >
 
-    constructor(options: ApiManageOptions<List>) {
+    constructor(
+        options: ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>,
+    ) {
         this.options = this.mergeOptions(options)
 
         if (typeof this.options.request !== 'function') {
@@ -486,32 +649,28 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
             throw Error('apiManage: list must be object!')
         }
 
-        const methodAction: NonNullable<ApiManageOptions<List>['customize']> = {
-            ...this.options.defaultMethodNames.reduce((r, method) => {
-                return {
-                    ...r,
-                    [method]: (path: string, serveName: string) =>
-                        this.createServeFunction(path, method, serveName),
-                }
-            }, {}),
-            ...this.options.customize,
-        }
+        const customize: Record<
+            string,
+            (
+                path?: string,
+                serveName?: ApiServeName<List, MatchStr, ReplaceStr>,
+            ) => ServeFunction<any, any, any, ExtraOptions>
+        > = this.options.customize as Record<string, any>
 
         const apiList = ApiManage.flatApi(this.options.list)
 
         this.serveMap = Object.entries(apiList).reduce(
             (result: any, [apiName, { path, method }]: [string, any]) => {
-                if (typeof methodAction[method] !== 'function') {
-                    return result
-                }
-
-                const serveName: string = ApiManage.replaceFnName(
+                const serveName = ApiManage.replaceFnName(
                     apiName,
                     this.options.matchStr,
                     this.options.replaceStr,
-                )
+                ) as ApiServeName<List, MatchStr, ReplaceStr>
 
-                const serveFn = methodAction[method](path, serveName)
+                const serveFn =
+                    typeof customize[method] === 'function'
+                        ? customize[method](path, serveName)
+                        : this.createServeFunction(path, method, serveName)
 
                 if (typeof serveFn !== 'function') {
                     throw Error(
@@ -540,22 +699,22 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
     public call<R = Result>({
         url,
         method = 'get',
-        data,
+        params,
         tplData = {},
         serveName = 'dynamicRequest',
         isLimit = true,
         cancelParams = {},
-        config = {},
-    }: DynamicRequestOptions): Promise<R> {
+        extraOptions = {} as ExtraOptions,
+    }: DynamicRequestOptions<ExtraOptions>): Promise<R> {
         return this.executeRequest<R>({
             method,
             path: url,
-            params: data,
+            params,
             tplData,
             serveName,
             isLimit,
             cancelParams,
-            config,
+            extraOptions,
         })
     }
 
@@ -615,7 +774,9 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
      * @returns {TResolveFn}
      * @memberof ApiManage
      */
-    public resolve(serveName: string): ServeFunction['resolve'] {
+    public resolve(
+        serveName: ApiServeName<List, MatchStr, ReplaceStr>,
+    ): ServeFunction<any, any, any, ExtraOptions>['resolve'] {
         return this.serveMap?.[serveName]?.serveFn?.resolve
     }
 
@@ -626,7 +787,7 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
      * @returns {void}
      * @memberof ApiManage
      */
-    public abort(serveName: string): void {
+    public abort(serveName: ApiServeName<List, MatchStr, ReplaceStr>): void {
         return this.serveMap?.[serveName]?.serveFn?.abort?.()
     }
 
@@ -643,10 +804,11 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
         List,
         Result,
         any,
-        'api',
-        'serve',
+        MatchStr,
+        ReplaceStr,
         ResultMap,
-        ParamsMap
+        ParamsMap,
+        ExtraOptions
     > {
         return Object.entries(this.serveMap).reduce(
             (r, [k, items]) => ({
@@ -658,26 +820,25 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
             List,
             Result,
             any,
-            'api',
-            'serve',
+            MatchStr,
+            ReplaceStr,
             ResultMap,
-            ParamsMap
+            ParamsMap,
+            ExtraOptions
         >
     }
 
-    private mergeOptions(options: ApiManageOptions<List>): FullApiManageOptions<List> {
+    private mergeOptions(
+        options: ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>,
+    ): FullApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr> {
         const defaultOptions: Omit<
-            FullApiManageOptions<List>,
+            FullApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>,
             'list' | 'request'
         > = {
-            matchStr: 'api',
-            replaceStr: 'serve',
+            matchStr: 'api' as MatchStr,
+            replaceStr: 'serve' as ReplaceStr,
             hooks: {},
             limitResponse: (result) => result,
-            defaultMethodNames: ['get', 'post', 'put', 'delete'],
-            methodsForDataKeyNames: {
-                get: 'params',
-            },
             customize: {},
             validate: () => true,
         }
@@ -692,30 +853,30 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
         path: string,
         method: string,
         serveName: string,
-    ): ServeFunction {
-        return ((
-            params: any,
-            {
+    ): ServeFunction<any, any, any, ExtraOptions> {
+        return ((params: any, options = {} as ServeFnOptions<ExtraOptions>) => {
+            const {
                 tplData = {},
                 cancelParams = {},
                 isLimit = true,
                 ...config
-            }: ServeFnOptions = {},
-        ) =>
-            this.executeRequest({
+            } = options
+
+            return this.executeRequest({
                 method,
                 path,
                 serveName,
                 params,
-                tplData,
-                cancelParams,
+                tplData: tplData as TemplateData,
+                cancelParams: cancelParams as CancelParams<ExtraOptions>,
                 isLimit,
-                config,
-            })) as ServeFunction
+                extraOptions: config as ExtraOptions,
+            })
+        }) as ServeFunction<any, any, any, ExtraOptions>
     }
 
     private attachServeFunctionMethods(
-        serveFn: ServeFunction,
+        serveFn: ServeFunction<any, any, any, ExtraOptions>,
         path: string,
         method: string,
         serveName: string,
@@ -744,7 +905,7 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
         method: string,
         serveName: string,
         data: Record<string, any> = {},
-        tplData: ServeFnOptions['tplData'] = {},
+        tplData: TemplateData = {},
     ): ResolvedRequest {
         let { protocol, hostname, port, pathname, query, hash } =
             this.parseLocation(ApiManage.template(path, tplData))
@@ -784,27 +945,47 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
         tplData = {},
         cancelParams = {},
         isLimit = true,
-        config = {},
-    }: ExecuteRequestParams): Promise<R> {
+        extraOptions = {} as ExtraOptions,
+    }: ExecuteRequestParams<ExtraOptions>): Promise<R> {
         const normalizedMethod = method || 'get'
-        const requestParams = {
-            method: normalizedMethod,
-            url: ApiManage.template(path, tplData),
-            [this.options.methodsForDataKeyNames[normalizedMethod] ?? 'data']:
-                params,
-        }
+        const url = ApiManage.template(path, tplData)
         let requestToken = ''
+        let cancelFnRef: ((message?: any) => void) | undefined
         const timestamp = `${Date.now()}`
-        const requestConfig = {
-            ...config,
+        let requestExtraOptions = {
+            ...extraOptions,
+        } as ExtraOptions
+        const typedServeName = serveName as ApiServeName<
+            List,
+            MatchStr,
+            ReplaceStr
+        >
+        const methodName = normalizedMethod as ApiMethodName<List>
+        const requestContext = {
+            serveName: typedServeName,
+            params,
+        } as ApiRequestContextByList<List, MatchStr, ReplaceStr>
+        const clearCurrentCancelToken = () => {
+            if (
+                requestToken &&
+                cancelFnRef &&
+                this.cancelList[requestToken]?.[0] === cancelFnRef
+            ) {
+                Reflect.deleteProperty(this.cancelList, requestToken)
+            }
         }
 
         if (
-            this.options.CancelRequest &&
+            this.options.cancel &&
             (cancelParams?.open ?? true)
         ) {
             requestToken = ApiManage.createCancelToken(
-                requestParams as RequestOptions,
+                {
+                    url,
+                    method: normalizedMethod,
+                    context: requestContext,
+                    extraOptions: requestExtraOptions,
+                },
                 cancelParams,
             )
 
@@ -814,29 +995,41 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
             }
 
             try {
-                requestConfig.cancelToken = new this.options.CancelRequest(
-                    (cancelFn) => {
-                        Reflect.set(this.cancelList, requestToken, [
-                            cancelFn,
-                            serveName,
-                        ])
-                    },
+                const cancelResult = this.options.cancel(
+                    url,
+                    methodName,
+                    requestContext,
+                    requestExtraOptions,
                 )
+
+                if (cancelResult?.cancel) {
+                    cancelFnRef = cancelResult.cancel
+                    requestExtraOptions = {
+                        ...requestExtraOptions,
+                        ...cancelResult.extraOptions,
+                    }
+                    Reflect.set(this.cancelList, requestToken, [
+                        cancelResult.cancel,
+                        serveName,
+                    ])
+                }
             } catch (err) {
                 console.error(err)
             }
         }
 
         return Promise.resolve()
-            .then(() => this.options.hooks.start?.(serveName, timestamp))
+            .then(() => this.options.hooks.start?.(typedServeName, timestamp))
             .then(() =>
-                this.options.request({
-                    ...requestConfig,
-                    ...requestParams,
-                }),
+                this.options.request(
+                    url,
+                    methodName,
+                    requestContext,
+                    requestExtraOptions,
+                ),
             )
             .then((res) =>
-                Promise.resolve(this.options.validate(res, serveName)).then(
+                Promise.resolve(this.options.validate(res, typedServeName)).then(
                     (isValid) => {
                         if (!isValid) {
                             throw {
@@ -845,21 +1038,19 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
                             }
                         }
 
-                        if (requestToken) {
-                            Reflect.deleteProperty(
-                                this.cancelList,
-                                requestToken,
-                            )
-                        }
+                        clearCurrentCancelToken()
 
                         return Promise.resolve(
                             this.options.hooks.resolve?.(
-                                serveName,
+                                typedServeName,
                                 timestamp,
                             ),
                         ).then(() =>
                             isLimit
-                                ? this.options.limitResponse(res, serveName)
+                                ? this.options.limitResponse(
+                                      res,
+                                      typedServeName,
+                                  )
                                 : res,
                         )
                     },
@@ -868,12 +1059,15 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
             .then(
                 (value) =>
                     Promise.resolve(
-                        this.options.hooks.finally?.(serveName, timestamp),
+                        this.options.hooks.finally?.(
+                            typedServeName,
+                            timestamp,
+                        ),
                     ).then(() => value as R),
                 (error) =>
                     Promise.resolve(
                         this.options.hooks.reject?.(
-                            serveName,
+                            typedServeName,
                             timestamp,
                             error,
                         ),
@@ -882,12 +1076,13 @@ class ApiManage<List extends ApiList = ApiList, Result = unknown> {
                         .then(() =>
                             Promise.resolve(
                                 this.options.hooks.finally?.(
-                                    serveName,
+                                    typedServeName,
                                     timestamp,
                                 ),
                             ),
                         )
                         .catch(() => undefined)
+                        .then(() => clearCurrentCancelToken())
                         .then(() => {
                             throw error
                         }),

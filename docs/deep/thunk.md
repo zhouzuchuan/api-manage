@@ -81,17 +81,22 @@ service.serveUser_QueryList({ page: 1 });
 
 ## 多文件类型
 
-如果业务侧需要单独声明多个文件的 service 类型，可以使用 `ApiFilesServiceMap`：
+多文件清单可以先通过 `bindApi` 合并，再让 `getService()` 自动推导 service 类型：
 
 ```ts
-import type { ApiFilesServiceMap } from "api-manage";
-
 const apiFiles = {
     publicList,
     userList,
 };
 
-type Services = ApiFilesServiceMap<typeof apiFiles>;
+const apiList = ApiManage.bindApi(Object.values(apiFiles), serverParams);
+
+const apiManage = new ApiManage<typeof apiList>({
+    request,
+    list: apiList,
+});
+
+const service = apiManage.getService();
 ```
 
 ## 兼容 `bindApi`

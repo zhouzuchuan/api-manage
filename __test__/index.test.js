@@ -16,11 +16,27 @@ describe("测试 基础 用法 -------->", () => {
     // registerModel(model);
 
     const apiManage = new ApiManage({
-        request: axios,
+        request: (url, method, context, extraOptions) =>
+            axios({
+                ...extraOptions,
+                url,
+                method,
+                [method === "get" ? "params" : "data"]: context.params,
+            }),
         list: ApiManage.bindApi([
             apiList("https://jsonplaceholder.typicode.com"),
         ]),
-        CancelRequest: axios.CancelToken,
+        cancel: () => {
+            let cancel;
+            const cancelToken = new axios.CancelToken((fn) => {
+                cancel = fn;
+            });
+
+            return {
+                cancel,
+                extraOptions: { cancelToken },
+            };
+        },
         limitResponse: (result) => result.data,
     });
 
@@ -104,7 +120,13 @@ describe("测试 基础 用法 -------->", () => {
 
 describe("测试 实例方法 mergeQuery -------->", () => {
     const apiManage = new ApiManage({
-        request: axios,
+        request: (url, method, context, extraOptions) =>
+            axios({
+                ...extraOptions,
+                url,
+                method,
+                [method === "get" ? "params" : "data"]: context.params,
+            }),
         list: {},
     });
 

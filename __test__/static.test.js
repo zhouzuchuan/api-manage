@@ -185,35 +185,72 @@ describe("测试 static replaceFnName -------->", () => {
 });
 
 describe("测试 static createCancelToken -------->", () => {
-    const a = "apiGetList";
-    const b = "serveGetList";
-
     const options = {
         url: "/api/a/b",
         method: "get",
-        data: {
-            a: 1,
-        },
-        params: {
-            b: 1,
+        context: {
+            serveName: "serveGetList",
+            params: {
+                b: 1,
+            },
         },
     };
 
     it("全路径计算", () => {
         expect(ApiManage.createCancelToken(options)).toEqual(
-            "%2Fapi%2Fa%2Fb%7B%22params%22%3A%7B%22b%22%3A1%7D%7D"
+            encodeURIComponent(
+                '/api/a/b' + JSON.stringify({ method: "get", params: { b: 1 } })
+            )
         );
         expect(
             ApiManage.createCancelToken({
                 ...options,
                 method: "post",
             })
-        ).toEqual("%2Fapi%2Fa%2Fb%7B%22data%22%3A%7B%22a%22%3A1%7D%7D");
+        ).toEqual(
+            encodeURIComponent(
+                '/api/a/b' + JSON.stringify({ method: "post", params: { b: 1 } })
+            )
+        );
     });
 
     it("非全路径计算", () => {
         expect(ApiManage.createCancelToken(options, false)).toEqual(
-            "%2Fapi%2Fa%2Fb%7B%22params%22%3A%7B%22b%22%3A1%7D%7D"
+            encodeURIComponent(
+                '/api/a/b' + JSON.stringify({ method: "get", params: { b: 1 } })
+            )
+        );
+    });
+
+    it("按需把请求配置加入 token", () => {
+        expect(
+            ApiManage.createCancelToken({
+                ...options,
+                extraOptions: { headers: { jsonContent: true } },
+            })
+        ).toEqual(
+            encodeURIComponent(
+                '/api/a/b' + JSON.stringify({ method: "get", params: { b: 1 } })
+            )
+        );
+
+        expect(
+            ApiManage.createCancelToken(
+                {
+                    ...options,
+                    extraOptions: { headers: { jsonContent: true } },
+                },
+                { includeConfigKeys: ["headers"] }
+            )
+        ).toEqual(
+            encodeURIComponent(
+                '/api/a/b' +
+                    JSON.stringify({
+                        method: "get",
+                        params: { b: 1 },
+                        headers: { jsonContent: true },
+                    })
+            )
         );
     });
 });

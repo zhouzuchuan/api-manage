@@ -57,7 +57,13 @@ const apiList = {
 
 const apiManage = new ApiManage<typeof apiList>({
     list: apiList,
-    request: (options) => axios(options),
+    request: (url, method, context, extraOptions) =>
+        axios({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
     validate: (res) => res.code === 0,
     limitResponse: (res) => res.data,
 });
@@ -69,6 +75,36 @@ const user = await apis.serveGetUser({ id: 1 });
 
 const raw = await apis.serveGetUser({ id: 1 }, { isLimit: false });
 // raw: ApiResponse<UserInfo>
+```
+
+## 请求函数名类型推导
+
+请求函数名会从 API 清单自动推导，默认规则是 `apiXxx -> serveXxx`。`abort()`、`resolve()`、`validate()`、`limitResponse()` 和 hooks 里的 `serveName` 也会获得同一组类型提示。
+
+```ts
+apiManage.abort("serveGetUser");
+apiManage.resolve("serveGetUser");
+apis.serveGetUser.resolve({ id: 1 });
+```
+
+如果使用自定义命名规则，需要把字面量类型传给 `ApiManage`：
+
+```ts
+const apiManage = new ApiManage<
+    typeof apiList,
+    {},
+    unknown,
+    "api",
+    "request"
+>({
+    list: apiList,
+    request,
+    matchStr: "api",
+    replaceStr: "request",
+});
+
+const apis = apiManage.getService();
+await apis.requestGetUser({ id: 1 });
 ```
 
 ## 自定义 `limitResponse` 类型
@@ -124,10 +160,10 @@ apis.serveGetUser.resolve({ keyword: "tom" }, { id: 1 }).requestUrl;
 const data = await apiManage.call<UserInfo>({
     url: "/runtime/:id/detail",
     method: "post",
-    data: { userId: 1 },
+    params: { userId: 1 },
     tplData: { id: "abc" },
     serveName: "runtimeDetail",
-    config: {
+    extraOptions: {
         headers: {
             noEncrypt: true,
         },
@@ -160,6 +196,90 @@ const user = await apis.serveGetUser({ id: 1 });
 const raw = await apis.serveGetUser({ id: 1 }, { isLimit: false });
 ```
 
+## 扩展请求 options 类型
+
+`serveXxx(params, options)` 的第二个参数采用白名单模式，只允许内置字段和业务通过 `ExtraOptions` 显式声明的字段。`includeConfigKeys` 也只能填写 `ExtraOptions` 中声明过的 key。
+
+```ts
+type ApiRequestOptions = {
+    headers?: Record<string, string | number | boolean | null | undefined>;
+    responseType?: "json" | "blob" | "arraybuffer";
+    timeout?: number;
+};
+
+const apiList = ApiManage.bindApi(Object.values(apiFiles), serverParams);
+
+const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        axios({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+});
+
+export const useApis = () => apiManage.getService();
+
+await useApis().serveGetUser(
+    { id: 1 },
+    {
+        headers: { jsonContent: true },
+        timeout: 10000,
+        cancelParams: { includeConfigKeys: ["headers"] },
+    },
+);
+```
+
+## 请求 adapter 与取消请求
+
+`api-manage` 只传递通用请求信息，不绑定 axios、fetch 或其他请求库。`request` 会收到四个参数：
+
+```ts
+request: (url, method, context, extraOptions) => {
+    // context.serveName 可以收窄 context.params 类型
+    return axios({
+        ...extraOptions,
+        url,
+        method,
+        [method === "get" ? "params" : "data"]: context.params,
+    });
+}
+```
+
+重复请求取消通过通用 `cancel` adapter 接入。业务在 `ExtraOptions` 中声明实际请求库需要的字段，例如 axios `cancelToken` 或 fetch `signal`。
+
+```ts
+type ApiRequestOptions = {
+    cancelToken?: unknown;
+};
+
+const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        axios({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+    cancel: () => {
+        let cancel!: (message?: any) => void;
+        const cancelToken = new axios.CancelToken((fn) => {
+            cancel = fn;
+        });
+
+        return {
+            cancel,
+            extraOptions: { cancelToken },
+        };
+    },
+});
+```
+
+类型声明建议业务项目使用 TypeScript 4.1 及以上版本；库类型只使用 TS 4.1-4.9 的稳定能力，不依赖 TS5-only 语法。
+
 ## Demo
 
 ```bash
@@ -188,12 +308,41 @@ npm run release
 # 只检查发布流程，不真正发布
 npm run release -- --dry-run
 
+# 发布 beta 预发布版本，会自动把版本升级为 x.y.z-beta.n，并使用 beta tag
+npm run release -- --beta
+
+# 发布其他预发布版本，例如 alpha / rc
+npm run release -- --pre alpha
+npm run release -- --pre rc
+
 # 使用指定 tag 或 OTP
 npm run release -- --tag beta
 npm run release -- --otp 123456
+
+# 临时指定 npm registry，适合本机默认 registry 是镜像源的情况
+npm run release -- --beta --registry https://registry.npmjs.org/
+
+# 跳过测试，仅执行 build / pack / publish
+npm run release -- --skip-tests
 ```
 
-`release` 脚本会依次执行 `type-check`、`test`、`build`、`npm pack --dry-run`。如果当前未登录 npm，会自动进入 `npm login --auth-type=legacy`，按提示输入账号、密码和 OTP 即可。
+`release` 脚本会依次执行 `type-check`、`test`、`build`、`npm pack --dry-run`。如果当前未登录 npm，会自动进入 `npm login --auth-type=legacy`，按提示输入账号、密码和 OTP 即可。发布到 npm 官方源时，建议显式加上 `--registry https://registry.npmjs.org/`，避免本机默认镜像源不支持登录或发布。
+
+参数说明：
+
+| 参数 | 说明 |
+| --- | --- |
+| `--dry-run` | 只做校验、构建和 `npm pack --dry-run`，不执行 `npm publish` |
+| `--skip-tests` | 跳过 `type-check` 和 `test`，适合已手动验证过的发布 |
+| `--tag <tag>` | 指定 npm dist-tag，默认 `latest` |
+| `--beta` | 等价于 `--pre beta`，会执行 `npm version prerelease --preid beta --no-git-tag-version`，并默认使用 `beta` tag |
+| `--pre <id>` | 发布预发布版本，例如 `--pre alpha`、`--pre rc` |
+| `--preid <id>` | `--pre` 的 npm 术语别名，保留给熟悉 npm 的用法 |
+| `--prerelease <id>` | `--pre` 的别名 |
+| `--otp <code>` | npm 双因素验证码 |
+| `--registry <url>` | 临时指定本次发布使用的 npm registry，例如 `https://registry.npmjs.org/` |
+
+注意：`--beta` / `--pre <id>` 会修改 `package.json` 里的 `version`，但不会自动提交，也不会创建 git tag。`--dry-run` 也会改版本号，因为它验证的是即将发布的真实包版本。
 
 ## License
 

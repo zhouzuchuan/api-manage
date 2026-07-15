@@ -1,6 +1,6 @@
 {
     "name": "api-manage",
-    "version": "3.0.0",
+    "version": "3.0.1-beta.2",
     "description": "api服务管理解决方案",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
