@@ -55,7 +55,7 @@ const apiList = {
     },
 } as const;
 
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request: (url, method, context, extraOptions) =>
         axios({
@@ -125,7 +125,7 @@ const apiList = {
     },
 } as const;
 
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request,
     validate: (res) => res.code === 0,
@@ -198,18 +198,17 @@ const raw = await apis.serveGetUser({ id: 1 }, { isLimit: false });
 
 ## 扩展请求 options 类型
 
-`serveXxx(params, options)` 的第二个参数采用白名单模式，只允许内置字段和业务通过 `ExtraOptions` 显式声明的字段。`includeConfigKeys` 也只能填写 `ExtraOptions` 中声明过的 key。
+`serveXxx(params, options)` 的第二个参数采用白名单模式，只允许内置字段和业务通过 `ExtraOptions` 显式声明的字段。`headers` 是默认内置字段，`includeConfigKeys` 也只能填写已声明的 key。
 
 ```ts
 type ApiRequestOptions = {
-    headers?: Record<string, string | number | boolean | null | undefined>;
     responseType?: "json" | "blob" | "arraybuffer";
     timeout?: number;
 };
 
 const apiList = ApiManage.bindApi(Object.values(apiFiles), serverParams);
 
-const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
+const apiManage = ApiManage.create<typeof apiList, ApiRequestOptions>()({
     list: apiList,
     request: (url, method, context, extraOptions) =>
         axios({
@@ -232,6 +231,18 @@ await useApis().serveGetUser(
 );
 ```
 
+项目可以通过 declaration merging 扩展默认字段，适合 `noEncrypt`、`contentTypeJson` 这类业务约定：
+
+```ts
+declare module "api-manage" {
+    interface ApiManageDefaultExtraOptions {
+        contentTypeJson?: boolean;
+        noEncrypt?: boolean;
+        deepEncrypt?: boolean;
+    }
+}
+```
+
 ## 请求 adapter 与取消请求
 
 `api-manage` 只传递通用请求信息，不绑定 axios、fetch 或其他请求库。`request` 会收到四个参数：
@@ -248,14 +259,14 @@ request: (url, method, context, extraOptions) => {
 }
 ```
 
-重复请求取消通过通用 `cancel` adapter 接入。业务在 `ExtraOptions` 中声明实际请求库需要的字段，例如 axios `cancelToken` 或 fetch `signal`。
+重复请求取消通过通用 `cancel` adapter 接入。`cancel` 返回的 `extraOptions` 会合并到 `request` 第四个参数里，所以 `request` 里要把 `extraOptions` 传给真实请求库。
+
+axios `CancelToken` 可以直接使用内置 helper：
 
 ```ts
-type ApiRequestOptions = {
-    cancelToken?: unknown;
-};
+import ApiManage, { createAxiosCancel } from "api-manage";
 
-const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request: (url, method, context, extraOptions) =>
         axios({
@@ -264,18 +275,55 @@ const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
             method,
             [method === "get" ? "params" : "data"]: context.params,
         }),
-    cancel: () => {
-        let cancel!: (message?: any) => void;
-        const cancelToken = new axios.CancelToken((fn) => {
-            cancel = fn;
-        });
-
-        return {
-            cancel,
-            extraOptions: { cancelToken },
-        };
-    },
+    cancel: createAxiosCancel(axios),
 });
+```
+
+fetch、现代 axios、ky、ofetch 等支持 `AbortController.signal` 的请求库，可以使用：
+
+```ts
+import ApiManage, { createAbortCancel } from "api-manage";
+
+const apiManage = ApiManage.create<typeof apiList>()({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        fetch(url, {
+            ...extraOptions,
+            method,
+            body: method === "get" ? undefined : JSON.stringify(context.params),
+        }),
+    cancel: createAbortCancel(),
+});
+```
+
+其他请求库可以自己实现同样的最小协议：`cancel` 给 `api-manage` 下次重复请求时调用，`extraOptions` 传给真实请求库。
+
+`ApiManage.create(options)` 和 `new ApiManage(options)` 旧用法仍然兼容；需要从 `cancel().extraOptions` 自动推导 `request.extraOptions` 时，推荐使用 `ApiManage.create<List, ExtraOptions>()({...})`。
+
+```ts
+cancel: () => {
+    const task = createRequestTaskSomehow();
+
+    return {
+        cancel: (message) => task.abort(message),
+        extraOptions: { task },
+    };
+};
+```
+
+如果把 cancel adapter 抽成复用函数，可以标注注入字段类型：
+
+```ts
+import type { CancelAdapterInjectedResult } from "api-manage";
+
+const createTaskCancel = (): CancelAdapterInjectedResult<{ task: Task }> => {
+    const task = createRequestTaskSomehow();
+
+    return {
+        cancel: (message) => task.abort(message),
+        extraOptions: { task },
+    };
+};
 ```
 
 类型声明建议业务项目使用 TypeScript 4.1 及以上版本；库类型只使用 TS 4.1-4.9 的稳定能力，不依赖 TS5-only 语法。

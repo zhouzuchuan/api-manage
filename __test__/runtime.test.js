@@ -1,4 +1,8 @@
-import ApiManage, { defineApi } from "../src/index";
+import ApiManage, {
+    createAbortCancel,
+    createAxiosCancel,
+    defineApi,
+} from "../src/index";
 
 const createDeferredRequest = () => {
     const calls = [];
@@ -61,6 +65,36 @@ describe("runtime request pipeline", () => {
                 data: { name: "Tom" },
             }),
         );
+    });
+
+    it("creates an ApiManage instance through the static factory", () => {
+        const request = jest.fn((url, method, context, extraOptions) =>
+            Promise.resolve({
+                url,
+                method,
+                serveName: context.serveName,
+                params: context.params,
+                extraOptions,
+            }),
+        );
+        const apiManage = ApiManage.create({
+            request,
+            list: {
+                get: { apiGetUser: "/user" },
+            },
+        });
+
+        return expect(
+            apiManage.getService().serveGetUser({ id: 1 }, { headers: { token: "t" } }),
+        ).resolves.toMatchObject({
+            url: "/user",
+            method: "get",
+            serveName: "serveGetUser",
+            params: { id: 1 },
+            extraOptions: {
+                headers: { token: "t" },
+            },
+        });
     });
 
     it("rejects when async validate returns false", () => {
@@ -269,6 +303,84 @@ describe("runtime request pipeline", () => {
             .then(() => {
                 expect(request).toHaveBeenCalledTimes(2);
                 expect(canceledMessages).toEqual([]);
+            });
+    });
+
+    it("creates axios cancel adapter", () => {
+        class CancelToken {
+            constructor(executor) {
+                executor((message) => {
+                    const error = new Error(message);
+                    this.reason = error;
+                    this.reject?.(error);
+                });
+            }
+        }
+
+        const request = jest.fn((url, method, context, extraOptions) => {
+            const { cancelToken } = extraOptions;
+            return new Promise((resolve, reject) => {
+                if (cancelToken.reason) {
+                    reject(cancelToken.reason);
+                    return;
+                }
+                cancelToken.reject = reject;
+            });
+        });
+        const apiManage = new ApiManage({
+            request,
+            cancel: createAxiosCancel({ CancelToken }),
+            list: { get: { apiGetUser: "/user" } },
+        });
+        const serveGetUser = apiManage.getService().serveGetUser;
+        const firstRequest = serveGetUser({ id: 1 });
+
+        serveGetUser({ id: 1 });
+
+        return expect(firstRequest)
+            .rejects.toThrow("取消重复请求")
+            .then(() => {
+                expect(request).toHaveBeenCalledTimes(2);
+            });
+    });
+
+    it("creates abort controller cancel adapter", () => {
+        const controllers = [];
+
+        class AbortControllerMock {
+            constructor() {
+                this.signal = { aborted: false };
+                controllers.push(this);
+            }
+
+            abort(reason) {
+                this.signal.aborted = true;
+                this.signal.reason = reason;
+            }
+        }
+
+        const { request } = createDeferredRequest();
+        const apiManage = new ApiManage({
+            request,
+            cancel: createAbortCancel(AbortControllerMock),
+            list: { get: { apiGetUser: "/user" } },
+        });
+        const serveGetUser = apiManage.getService().serveGetUser;
+
+        serveGetUser({ id: 1 });
+        serveGetUser({ id: 1 });
+
+        return Promise.resolve()
+            .then(() => Promise.resolve())
+            .then(() => {
+                expect(request).toHaveBeenCalledTimes(2);
+                expect(request.mock.calls[0][3].signal).toBe(
+                    controllers[0].signal,
+                );
+                expect(controllers[0].signal).toMatchObject({
+                    aborted: true,
+                    reason: "取消重复请求",
+                });
             });
     });
 

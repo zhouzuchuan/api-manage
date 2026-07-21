@@ -44,7 +44,7 @@ const apiList = {
     },
 } as const;
 
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request: (url, method, context, extraOptions) =>
         axios({
@@ -132,11 +132,10 @@ const apiList = {
 
 旧清单仍可通过 `getService<ResultMap, ParamsMap>()` 补充类型，详见[类型系统](/deep/types.md)。
 
-请求函数第二个参数可通过 `ExtraOptions` 扩展。声明后会进入白名单模式，只允许内置字段和业务显式声明的字段：
+请求函数第二个参数可通过 `ExtraOptions` 扩展。声明后会进入白名单模式，只允许内置字段和业务显式声明的字段；`headers` 是默认内置字段：
 
 ```ts
 type ApiRequestOptions = {
-    headers?: Record<string, string | number | boolean | null | undefined>;
     timeout?: number;
 };
 

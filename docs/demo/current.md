@@ -61,7 +61,7 @@ const apiList = {
     },
 } as const;
 
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request: service,
     validate: async (res) => res.data.code === 200,
@@ -134,7 +134,6 @@ const apiFiles = {
 };
 
 type ApiRequestOptions = {
-    headers?: Record<string, string | number | boolean | null | undefined>;
     responseType?: "json" | "blob" | "arraybuffer";
     timeout?: number;
 };

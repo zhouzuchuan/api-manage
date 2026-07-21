@@ -72,7 +72,7 @@ const apiList = {
     },
 } as const;
 
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request,
     limitResponse: (res) => res.ret,
@@ -134,11 +134,10 @@ apis.requestGetUser({ id: 1 });
 
 ## 扩展请求 options 类型
 
-`api-manage` 不内置 `headers`、`responseType` 等具体请求库字段。请求函数第二个参数可以通过 `ExtraOptions` 泛型扩展；声明后会进入白名单模式：
+`api-manage` 默认内置通用 `headers` 字段。其他请求库字段或业务字段可以通过 `ExtraOptions` 泛型扩展；声明后会进入白名单模式：
 
 ```ts
 type ApiRequestOptions = {
-    headers?: Record<string, string | number | boolean | null | undefined>;
     responseType?: "json" | "blob" | "arraybuffer";
     timeout?: number;
 };
@@ -174,7 +173,19 @@ await apis.serveGetUser(
 const apis = apiManage.getService<ResultMap, ParamsMap>();
 ```
 
-未传 `ExtraOptions` 时只能使用内置字段。业务想传新的请求配置字段时，需要显式加入 `ApiRequestOptions`。
+`headers` 会自动合并到请求 options 中；业务想传新的请求配置字段时，只需要把新增字段显式加入 `ApiRequestOptions`。
+
+项目也可以通过 declaration merging 全局扩展默认字段，适合 `noEncrypt`、`contentTypeJson` 这类业务约定：
+
+```ts
+declare module "api-manage" {
+    interface ApiManageDefaultExtraOptions {
+        contentTypeJson?: boolean;
+        noEncrypt?: boolean;
+        deepEncrypt?: boolean;
+    }
+}
+```
 
 ## 旧字符串清单类型
 
@@ -214,7 +225,7 @@ const apiFiles = {
 
 const apiList = ApiManage.bindApi(Object.values(apiFiles), serverParams);
 
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request: (url, method, context, extraOptions) =>
         service({

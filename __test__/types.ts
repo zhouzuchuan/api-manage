@@ -2,8 +2,11 @@ import ApiManage, {
     ApiRequestContextByList,
     ApiFilesServiceMap,
     ApiList,
+    CancelAdapterInjectedResult,
     ServeFnOptions,
     TemplateData,
+    createAbortCancel,
+    createAxiosCancel,
     defineApi,
 } from "../src/index";
 
@@ -148,12 +151,16 @@ typedService.serveBase_GetOcrResult.resolve({ taskId: "task-1" });
 const typedRequestContext: ApiRequestContextByList<typeof typedApi> = {
     serveName: "serveBase_GetOcrResult",
     params: { taskId: "task-1" },
+    controlOptions: {
+        isLimit: true,
+    },
 };
 
 const invalidTypedRequestContext: ApiRequestContextByList<typeof typedApi> = {
     serveName: "serveBase_GetOcrResult",
     // @ts-expect-error context params should follow defineApi params.
     params: { id: "task-1" },
+    controlOptions: {},
 };
 
 // @ts-expect-error resolve params should follow defineApi params.
@@ -277,7 +284,6 @@ const invalidDefaultOptions: ServeFnOptions = {
 };
 
 type ApiRequestOptions = {
-    headers?: Record<string, string | number | boolean | null | undefined>;
     responseType?: "json" | "blob" | "arraybuffer";
     timeout?: number;
 };
@@ -334,8 +340,18 @@ servicesWithOptions.serveGetUser({ id: 1 }, {
     },
 });
 
-// @ts-expect-error default service options should reject undeclared extra keys.
 service.serveGetUser({ id: 1 }, { headers: { jsonContent: true } });
+
+service.serveGetUser({ id: 1 }, {
+    cancelParams: {
+        includeConfigKeys: ["headers"],
+    },
+});
+
+service.serveGetUser({ id: 1 }, {
+    // @ts-expect-error business options should still be declared before use.
+    noEncrypt: true,
+});
 
 const optionsWithHeaders: ServeFnOptions<ApiRequestOptions> = {
     headers: {
@@ -376,12 +392,182 @@ bindApiService.serveSearch<string>({ keyword: "a" }).then((value) => {
     return result;
 });
 
-const cancelApiManage = new ApiManage<typeof userApi, ApiRequestOptions>({
+const createApiManage = ApiManage.create<typeof userApi, ApiRequestOptions>()({
     request: (url, method, context, extraOptions) => {
         const headers = extraOptions?.headers;
+        const timeout = extraOptions?.timeout;
+        const isLimit = context.controlOptions.isLimit;
+        const tplData = context.controlOptions.tplData;
+        const cancelParams = context.controlOptions.cancelParams;
+        cancelParams?.includeConfigKeys?.includes("timeout");
+        // @ts-expect-error api-manage control options should stay on context.
+        const extraIsLimit = extraOptions?.isLimit;
+        // @ts-expect-error no cancel adapter means no injected cancelToken.
+        const cancelToken = extraOptions?.cancelToken;
+        void url;
+        void method;
+        void headers;
+        void isLimit;
+        void tplData;
+        void extraIsLimit;
+        void cancelToken;
+        return Promise.resolve(timeout);
+    },
+    list: userApi,
+});
+
+const directCreateApiManage = ApiManage.create({
+    request: (url, method, context, extraOptions) => {
         void url;
         void method;
         void context;
+        return Promise.resolve(extraOptions);
+    },
+    list: userApi,
+});
+
+const createService = createApiManage.getService();
+createService.serveGetUser(
+    { id: 1 },
+    {
+        headers: { jsonContent: true },
+        timeout: 1000,
+        cancelParams: {
+            includeConfigKeys: ["headers", "timeout"],
+        },
+    },
+);
+
+createService.serveGetUser({ id: 1 }, {
+    // @ts-expect-error cancel adapter fields should not be caller-provided.
+    cancelToken: "token",
+});
+
+type RequestResponse = {
+    data: {
+        code: number;
+        message: string;
+    };
+    headers: Record<string, string>;
+};
+
+const requestResultApiManage = ApiManage.create<typeof userApi>()({
+    request: () =>
+        Promise.resolve({
+            data: {
+                code: 200,
+                message: "ok",
+            },
+            headers: {
+                requestId: "request-id",
+            },
+        }),
+    validate: (res) => {
+        const code: number = res.data.code;
+        const requestId: string = res.headers.requestId;
+        // @ts-expect-error request result should not expose missing fields.
+        const missing = res.missing;
+        void requestId;
+        void missing;
+        return code === 200;
+    },
+    limitResponse: (res) => {
+        const message: string = res.data.message;
+        const headers: Record<string, string> = res.headers;
+        void headers;
+        return message;
+    },
+    list: userApi,
+});
+
+const syncRequestResultApiManage = ApiManage.create<typeof userApi>()({
+    request: (): RequestResponse => ({
+        data: {
+            code: 200,
+            message: "ok",
+        },
+        headers: {
+            requestId: "request-id",
+        },
+    }),
+    validate: (res) => {
+        const code: number = res.data.code;
+        return code === 200;
+    },
+    limitResponse: (res) => {
+        const requestId: string = res.headers.requestId;
+        return requestId;
+    },
+    list: userApi,
+});
+
+const anyRequestResult: any = {};
+const anyRequestResultApiManage = ApiManage.create<typeof userApi>()({
+    request: () => anyRequestResult,
+    validate: (res) => Boolean(res.missing.deep.value),
+    limitResponse: (res) => res.missing.deep.value,
+    list: userApi,
+});
+
+const createRequestNameApiManage = ApiManage.create<typeof userApi>()({
+    request: (url, method, context, extraOptions) => {
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(extraOptions);
+    },
+    list: userApi,
+    matchStr: "api",
+    replaceStr: "request",
+});
+
+const createRequestNameService = createRequestNameApiManage.getService();
+createRequestNameService.requestGetUser({ id: 1 });
+// @ts-expect-error replaceStr should rename serveGetUser to requestGetUser.
+createRequestNameService.serveGetUser({ id: 1 });
+
+const cancelVoidApiManage = ApiManage.create<
+    typeof userApi,
+    ApiRequestOptions
+>()({
+    request: (url, method, context, extraOptions) => {
+        // @ts-expect-error cancel returns no extraOptions, so cancelToken is not injected.
+        const cancelToken = extraOptions?.cancelToken;
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(cancelToken);
+    },
+    cancel: () => undefined,
+    list: userApi,
+});
+
+const cancelOnlyApiManage = ApiManage.create<
+    typeof userApi,
+    ApiRequestOptions
+>()({
+    request: (url, method, context, extraOptions) => {
+        // @ts-expect-error cancel returns no extraOptions, so cancelToken is not injected.
+        const cancelToken = extraOptions?.cancelToken;
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(cancelToken);
+    },
+    cancel: () => ({
+        cancel: (message?: any) => void message,
+    }),
+    list: userApi,
+});
+
+const cancelApiManage = new ApiManage<typeof userApi, ApiRequestOptions>({
+    request: (url, method, context, extraOptions) => {
+        const headers = extraOptions?.headers;
+        const timeout = extraOptions?.timeout;
+        void url;
+        void method;
+        void context;
+        void timeout;
         return Promise.resolve(headers);
     },
     cancel: (
@@ -408,6 +594,260 @@ const cancelApiManage = new ApiManage<typeof userApi, ApiRequestOptions>({
             },
         };
     },
+    list: userApi,
+});
+
+type MockCancelToken = {
+    canceled?: boolean;
+};
+
+const axiosCancelApiManage = new ApiManage<
+    typeof userApi,
+    ApiRequestOptions & { cancelToken?: MockCancelToken }
+>({
+    request: (url, method, context, extraOptions) => {
+        const cancelToken = extraOptions?.cancelToken;
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(cancelToken);
+    },
+    cancel: createAxiosCancel({
+        CancelToken: class {
+            canceled?: boolean;
+
+            constructor(fn: (cancel: (message?: any) => void) => void) {
+                fn(() => {
+                    this.canceled = true;
+                });
+            }
+        },
+    }),
+    list: userApi,
+});
+
+const createAxiosCancelApiManage = ApiManage.create<
+    typeof userApi,
+    ApiRequestOptions
+>()({
+    request: (url, method, context, extraOptions) => {
+        const headers = extraOptions?.headers;
+        const timeout = extraOptions?.timeout;
+        const cancelToken = extraOptions?.cancelToken;
+        const isLimit = context.controlOptions.isLimit;
+        // @ts-expect-error api-manage control options should stay on context.
+        const extraIsLimit = extraOptions?.isLimit;
+        void url;
+        void method;
+        void headers;
+        void timeout;
+        void isLimit;
+        void extraIsLimit;
+        return Promise.resolve(cancelToken);
+    },
+    cancel: createAxiosCancel({
+        CancelToken: class {
+            canceled?: boolean;
+
+            constructor(fn: (cancel: (message?: any) => void) => void) {
+                fn(() => {
+                    this.canceled = true;
+                });
+            }
+        },
+    }),
+    list: userApi,
+});
+
+const createAxiosCancelService = createAxiosCancelApiManage.getService();
+createAxiosCancelService.serveGetUser({ id: 1 }, {
+    headers: { jsonContent: true },
+    timeout: 1000,
+});
+
+createAxiosCancelService.serveGetUser({ id: 1 }, {
+    // @ts-expect-error cancelToken is only available inside request extraOptions.
+    cancelToken: {},
+});
+
+type MockSignal = {
+    aborted?: boolean;
+};
+
+const abortCancelApiManage = new ApiManage<
+    typeof userApi,
+    ApiRequestOptions & { signal?: MockSignal }
+>({
+    request: (url, method, context, extraOptions) => {
+        const signal = extraOptions?.signal;
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(signal);
+    },
+    cancel: createAbortCancel(
+        class {
+            signal: MockSignal = {};
+
+            abort() {
+                this.signal.aborted = true;
+            }
+        },
+    ),
+    list: userApi,
+});
+
+const createAbortCancelApiManage = ApiManage.create<
+    typeof userApi,
+    ApiRequestOptions
+>()({
+    request: (url, method, context, extraOptions) => {
+        const headers = extraOptions?.headers;
+        const timeout = extraOptions?.timeout;
+        const signal = extraOptions?.signal;
+        void url;
+        void method;
+        void context;
+        void headers;
+        void timeout;
+        return Promise.resolve(signal);
+    },
+    cancel: createAbortCancel(
+        class {
+            signal: MockSignal = {};
+
+            abort() {
+                this.signal.aborted = true;
+            }
+        },
+    ),
+    list: userApi,
+});
+
+const createAbortCancelService = createAbortCancelApiManage.getService();
+createAbortCancelService.serveGetUser({ id: 1 }, {
+    headers: { jsonContent: true },
+    timeout: 1000,
+});
+
+createAbortCancelService.serveGetUser({ id: 1 }, {
+    // @ts-expect-error signal is only available inside request extraOptions.
+    signal: {},
+});
+
+type MockTask = {
+    abort: (message?: any) => void;
+};
+
+const customCancelApiManage = ApiManage.create<
+    typeof userApi,
+    ApiRequestOptions
+>()({
+    request: (url, method, context, extraOptions) => {
+        const task = extraOptions?.task;
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(task);
+    },
+    cancel: () => {
+        const task: MockTask = {
+            abort: (message?: any) => void message,
+        };
+
+        return {
+            cancel: task.abort,
+            extraOptions: { task },
+        };
+    },
+    list: userApi,
+});
+
+const customCancelService = customCancelApiManage.getService();
+customCancelService.serveGetUser({ id: 1 }, {
+    timeout: 1000,
+});
+
+customCancelService.serveGetUser({ id: 1 }, {
+    // @ts-expect-error task is only available inside request extraOptions.
+    task: {
+        abort: () => undefined,
+    },
+});
+
+const reusableCustomCancel = (): CancelAdapterInjectedResult<{
+    task?: MockTask;
+}> => {
+    const task: MockTask = {
+        abort: (message?: any) => void message,
+    };
+
+    return {
+        cancel: task.abort,
+        extraOptions: { task },
+    };
+};
+
+const reusableCustomCancelApiManage = ApiManage.create<
+    typeof userApi,
+    ApiRequestOptions
+>()({
+    request: (url, method, context, extraOptions) => {
+        const task = extraOptions?.task;
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(task);
+    },
+    cancel: reusableCustomCancel,
+    list: userApi,
+});
+
+const reusableCustomCancelService = reusableCustomCancelApiManage.getService();
+reusableCustomCancelService.serveGetUser({ id: 1 }, {
+    timeout: 1000,
+});
+
+reusableCustomCancelService.serveGetUser({ id: 1 }, {
+    // @ts-expect-error reusable cancel task is only available inside request extraOptions.
+    task: {
+        abort: () => undefined,
+    },
+});
+
+const defaultAxiosCancelApiManage = new ApiManage<typeof userApi>({
+    request: (url, method, context, extraOptions) => {
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(extraOptions);
+    },
+    cancel: createAxiosCancel({
+        CancelToken: class {
+            constructor(fn: (cancel: (message?: any) => void) => void) {
+                fn(() => undefined);
+            }
+        },
+    }),
+    list: userApi,
+});
+
+const defaultAbortCancelApiManage = new ApiManage<typeof userApi>({
+    request: (url, method, context, extraOptions) => {
+        void url;
+        void method;
+        void context;
+        return Promise.resolve(extraOptions);
+    },
+    cancel: createAbortCancel(
+        class {
+            signal: MockSignal = {};
+
+            abort() {
+                this.signal.aborted = true;
+            }
+        },
+    ),
     list: userApi,
 });
 
@@ -450,7 +890,30 @@ void typedRequestContext;
 void invalidTypedRequestContext;
 void bindApiList;
 void bindApiService;
+void createApiManage;
+void createService;
+void directCreateApiManage;
+void requestResultApiManage;
+void syncRequestResultApiManage;
+void anyRequestResultApiManage;
+void createRequestNameApiManage;
+void createRequestNameService;
+void cancelVoidApiManage;
+void cancelOnlyApiManage;
 void cancelApiManage;
+void axiosCancelApiManage;
+void createAxiosCancelApiManage;
+void createAxiosCancelService;
+void abortCancelApiManage;
+void createAbortCancelApiManage;
+void createAbortCancelService;
+void customCancelApiManage;
+void customCancelService;
+void reusableCustomCancel;
+void reusableCustomCancelApiManage;
+void reusableCustomCancelService;
+void defaultAxiosCancelApiManage;
+void defaultAbortCancelApiManage;
 void boundTypedApiList;
 void boundTypedService;
 void tplObject;

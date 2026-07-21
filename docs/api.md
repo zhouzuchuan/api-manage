@@ -64,7 +64,7 @@ export default ({ server }: { server: string }) =>
 真正执行请求的函数。`api-manage` 只传递通用请求信息，不绑定 axios、fetch 或其他请求库。
 
 ```ts
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request: (url, method, context, extraOptions) =>
         axios({
@@ -99,7 +99,7 @@ request: (url, method, context, extraOptions) => {
 处理请求成功后的返回值。默认返回原始响应。
 
 ```ts
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request,
     limitResponse: (res, serveName) => res.data,
@@ -153,12 +153,12 @@ hooks: {
 
 创建通用取消请求处理。`api-manage` 负责识别重复请求并调用上一次请求保存的 `cancel(message)`；具体如何接入 axios `CancelToken`、`AbortController` 或其他请求库，由业务 adapter 决定。
 
-```ts
-type ApiRequestOptions = {
-    cancelToken?: unknown;
-};
+axios `CancelToken` 可以使用 `createAxiosCancel(axiosLike)`：
 
-const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
+```ts
+import ApiManage, { createAxiosCancel } from "api-manage";
+
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request: (url, method, context, extraOptions) =>
         axios({
@@ -167,21 +167,77 @@ const apiManage = new ApiManage<typeof apiList, ApiRequestOptions>({
             method,
             [method === "get" ? "params" : "data"]: context.params,
         }),
-    cancel: () => {
-        let cancel!: (message?: any) => void;
-        const cancelToken = new axios.CancelToken((fn) => {
-            cancel = fn;
-        });
-
-        return {
-            cancel,
-            extraOptions: { cancelToken },
-        };
-    },
+    cancel: createAxiosCancel(axios),
 });
 ```
 
+fetch、现代 axios、ky、ofetch 等支持 `AbortController.signal` 的请求库，可以使用 `createAbortCancel()`：
+
+```ts
+import ApiManage, { createAbortCancel } from "api-manage";
+
+const apiManage = ApiManage.create<typeof apiList>()({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        fetch(url, {
+            ...extraOptions,
+            method,
+            body: method === "get" ? undefined : JSON.stringify(context.params),
+        }),
+    cancel: createAbortCancel(),
+});
+```
+
+其他请求库可以自己实现同样的最小协议：
+
+```ts
+cancel: () => {
+    const task = createRequestTaskSomehow();
+
+    return {
+        cancel: (message) => task.abort(message),
+        extraOptions: { task },
+    };
+};
+```
+
+如果把 cancel adapter 抽成复用函数，可以标注注入字段类型：
+
+```ts
+import type { CancelAdapterInjectedResult } from "api-manage";
+
+const createTaskCancel = (): CancelAdapterInjectedResult<{ task: Task }> => {
+    const task = createRequestTaskSomehow();
+
+    return {
+        cancel: (message) => task.abort(message),
+        extraOptions: { task },
+    };
+};
+```
+
+`cancel` 给 `api-manage` 内部保存，用来取消上一个重复请求；`extraOptions` 会合并后传给 `request` 第四个参数。`request` 里必须把 `extraOptions` 传给真实请求库，否则取消 token、`signal` 或自定义 task 不会生效。
+
+`ApiManage.create(options)` 和 `new ApiManage(options)` 旧用法仍然兼容；需要从 `cancel().extraOptions` 自动推导 `request.extraOptions` 时，推荐使用 `ApiManage.create<List, ExtraOptions>()({...})`。
+
 默认会按 `url + method + context.params` 计算取消 token。可以通过 `cancelParams` 调整。
+
+### `createAxiosCancel(axiosLike)`
+
+创建 axios `CancelToken` adapter。`api-manage` 不依赖 axios，业务需要把自己的 axios 包或兼容对象传进来。
+
+```ts
+cancel: createAxiosCancel(axios);
+```
+
+### `createAbortCancel(AbortControllerClass?)`
+
+创建 `AbortController` adapter。默认使用运行环境里的 `globalThis.AbortController`；特殊环境可以传入兼容构造器。
+
+```ts
+cancel: createAbortCancel();
+cancel: createAbortCancel(MyAbortController);
+```
 
 ### `matchStr` / `replaceStr`
 
@@ -267,16 +323,15 @@ type ParamsMap = {
 const apis = apiManage.getService<ResultMap, ParamsMap>();
 ```
 
-请求函数第二个参数通过 `new ApiManage<List, ExtraOptions>()` 扩展。声明后会进入白名单模式，只允许内置字段和业务显式声明的字段：
+请求函数第二个参数通过 `ApiManage.create<List, ExtraOptions>()` 或 `new ApiManage<List, ExtraOptions>()` 扩展。声明后会进入白名单模式，只允许内置字段和业务显式声明的字段；`headers` 是默认内置字段：
 
 ```ts
 type ExtraOptions = {
-    headers?: Record<string, string | number | boolean | null | undefined>;
     responseType?: "json" | "blob" | "arraybuffer";
     timeout?: number;
 };
 
-const apiManage = new ApiManage<typeof apiList, ExtraOptions>({
+const apiManage = ApiManage.create<typeof apiList, ExtraOptions>()({
     list: apiList,
     request: (url, method, context, extraOptions) =>
         service({
@@ -297,6 +352,18 @@ await apis.serveGetUser(
         cancelParams: { includeConfigKeys: ["headers"] },
     },
 );
+```
+
+项目可以通过 declaration merging 扩展默认字段：
+
+```ts
+declare module "api-manage" {
+    interface ApiManageDefaultExtraOptions {
+        contentTypeJson?: boolean;
+        noEncrypt?: boolean;
+        deepEncrypt?: boolean;
+    }
+}
 ```
 
 ### `call<R>()`
@@ -430,7 +497,9 @@ await apis.serveGetUser({ id: 1 });
 `options` 支持：
 
 ```ts
-type ServeFnOptions<ExtraOptions extends Record<string, any> = {}> = {
+type ServeFnOptions<
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
+> = {
     tplData?: TemplateData;
     cancelParams?: {
         isCalcFullPath?: boolean;
@@ -446,9 +515,9 @@ type ServeFnOptions<ExtraOptions extends Record<string, any> = {}> = {
 -   `cancelParams.isCalcFullPath`：取消 token 是否包含参数，默认 `true`
 -   `cancelParams.includeConfigKeys`：额外参与取消 token 计算的配置 key，只能使用 `ExtraOptions` 中声明过的 key，例如 `["headers"]`
 -   `isLimit`：是否返回 `limitResponse` 后的数据，默认 `true`
--   `ExtraOptions`：业务侧扩展字段，会作为 `request` 第四参透传，例如 `headers`、`timeout`
+-   `ExtraOptions`：业务侧扩展字段，会作为 `request` 第四参透传，例如 `timeout`
 
-不传 `ExtraOptions` 时只能使用内置字段。业务侧需要传 `headers`、`timeout` 等配置时，需要在 `new ApiManage<List, ExtraOptions>()` 中显式声明。
+`headers` 会自动合并到请求 options 中；业务侧需要传 `timeout` 等配置时，需要在 `ApiManage.create<List, ExtraOptions>()` 或 `new ApiManage<List, ExtraOptions>()` 中显式声明，或通过 `ApiManageDefaultExtraOptions` 做项目级扩展。
 
 默认取消 token 只按 `url + method + context.params` 计算；如果业务上同参数但不同 `headers` 应视为不同请求，可以显式开启：
 

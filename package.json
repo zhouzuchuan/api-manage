@@ -1,6 +1,6 @@
 {
     "name": "api-manage",
-    "version": "3.0.1-beta.2",
+    "version": "3.0.1-beta.4",
     "description": "api服务管理解决方案",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",
@@ -18,7 +18,7 @@
         "start:playground": "python3 -m http.server 3000 --bind 127.0.0.1 --directory docs",
         "demo": "npm run demo:cli",
         "demo:cli": "npm run build && node demo/current.js",
-        "type-check": "tsc --noEmit && tsc --noEmit --target esnext --module commonjs --strict --esModuleInterop --allowSyntheticDefaultImports __test__/types.ts",
+        "type-check": "tsc --noEmit && tsc --noEmit --target esnext --module commonjs --strict --esModuleInterop --allowSyntheticDefaultImports __test__/types.ts && tsc --noEmit --target esnext --module commonjs --strict --esModuleInterop --allowSyntheticDefaultImports __test__/default-extra-options.ts",
         "type-check:watch": "npm run type-check -- --watch",
         "build": "npm run build:types && npm run build:js",
         "build:types": "tsc --emitDeclarationOnly",

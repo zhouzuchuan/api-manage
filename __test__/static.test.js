@@ -1,4 +1,179 @@
+import path from "path";
+import ts from "typescript";
 import ApiManage from "../lib";
+
+const getExtraOptionsCompletionNames = (source) => {
+    const cwd = process.cwd();
+    const fileName = path.join(cwd, "virtual-completion.ts");
+    const marker = "/*MARK*/";
+    const position = source.indexOf(marker);
+    const cleanSource = source.replace(marker, "");
+    const compilerOptions = {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.CommonJS,
+        strict: true,
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+        moduleResolution: ts.ModuleResolutionKind.NodeJs,
+        skipLibCheck: true,
+    };
+    const serviceHost = {
+        getScriptFileNames: () => [fileName, path.join(cwd, "src/index.ts")],
+        getScriptVersion: () => "1",
+        getScriptSnapshot: (name) => {
+            if (name === fileName) {
+                return ts.ScriptSnapshot.fromString(cleanSource);
+            }
+
+            if (ts.sys.fileExists(name)) {
+                return ts.ScriptSnapshot.fromString(ts.sys.readFile(name));
+            }
+
+            return undefined;
+        },
+        getCurrentDirectory: () => cwd,
+        getCompilationSettings: () => compilerOptions,
+        getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
+        fileExists: ts.sys.fileExists,
+        readFile: ts.sys.readFile,
+        readDirectory: ts.sys.readDirectory,
+        directoryExists: ts.sys.directoryExists,
+        getDirectories: ts.sys.getDirectories,
+    };
+    const service = ts.createLanguageService(serviceHost);
+
+    return (
+        service
+            .getCompletionsAtPosition(fileName, position, {})
+            ?.entries.map((entry) => entry.name) || []
+    );
+};
+
+describe("测试 create cancel extraOptions 类型补全 -------->", () => {
+    const sourcePrefix = `
+import ApiManage, { createAbortCancel, createAxiosCancel, defineApi } from "./src/index";
+
+const userApi = {
+    get: {
+        apiGetUser: defineApi<{ id: number }, { id: number }>("/user"),
+    },
+};
+`;
+
+    it("createAxiosCancel 直写时提示 cancelToken", () => {
+        const names = getExtraOptionsCompletionNames(`
+${sourcePrefix}
+const axiosLike = {
+    CancelToken: class {
+        constructor(fn: (cancel: (message?: any) => void) => void) {
+            fn(() => undefined);
+        }
+    },
+};
+
+ApiManage.create<typeof userApi>()({
+    request: (url, method, context, extraOptions) => {
+        extraOptions?./*MARK*/
+        return Promise.resolve();
+    },
+    cancel: createAxiosCancel(axiosLike),
+    list: userApi,
+});
+`);
+
+        expect(names).toContain("cancelToken");
+        expect(names).toContain("headers");
+    });
+
+    it("createAbortCancel 直写时提示 signal", () => {
+        const names = getExtraOptionsCompletionNames(`
+${sourcePrefix}
+ApiManage.create<typeof userApi>()({
+    request: (url, method, context, extraOptions) => {
+        extraOptions?./*MARK*/
+        return Promise.resolve();
+    },
+    cancel: createAbortCancel(
+        class {
+            signal = {};
+
+            abort() {}
+        }
+    ),
+    list: userApi,
+});
+`);
+
+        expect(names).toContain("signal");
+        expect(names).toContain("headers");
+    });
+
+    it("request context.controlOptions 提示 serve 控制参数", () => {
+        const names = getExtraOptionsCompletionNames(`
+${sourcePrefix}
+ApiManage.create<typeof userApi>()({
+    request: (url, method, context, extraOptions) => {
+        context.controlOptions./*MARK*/
+        return Promise.resolve(extraOptions);
+    },
+    list: userApi,
+});
+`);
+
+        expect(names).toContain("isLimit");
+        expect(names).toContain("tplData");
+        expect(names).toContain("cancelParams");
+    });
+
+    it("validate res 从 request 返回值推导补全", () => {
+        const names = getExtraOptionsCompletionNames(`
+${sourcePrefix}
+ApiManage.create<typeof userApi>()({
+    request: () =>
+        Promise.resolve({
+            data: {
+                code: 200,
+            },
+            headers: {
+                requestId: "request-id",
+            },
+        }),
+    validate: (res) => {
+        res./*MARK*/
+        return true;
+    },
+    list: userApi,
+});
+`);
+
+        expect(names).toContain("data");
+        expect(names).toContain("headers");
+    });
+
+    it("limitResponse res 从 request 返回值推导补全", () => {
+        const names = getExtraOptionsCompletionNames(`
+${sourcePrefix}
+ApiManage.create<typeof userApi>()({
+    request: () => ({
+        data: {
+            code: 200,
+        },
+        headers: {
+            requestId: "request-id",
+        },
+    }),
+    limitResponse: (res) => {
+        res./*MARK*/
+        return res.data;
+    },
+    list: userApi,
+});
+`);
+
+        expect(names).toContain("data");
+        expect(names).toContain("headers");
+    });
+});
 
 describe("测试 static bindApi -------->", () => {
     const apiIndex = {

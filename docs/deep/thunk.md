@@ -66,7 +66,7 @@ const apiList = {
     },
 } as const;
 
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     list: apiList,
     request,
     validate: (res) => res.code === 0,
@@ -91,7 +91,7 @@ const apiFiles = {
 
 const apiList = ApiManage.bindApi(Object.values(apiFiles), serverParams);
 
-const apiManage = new ApiManage<typeof apiList>({
+const apiManage = ApiManage.create<typeof apiList>()({
     request,
     list: apiList,
 });

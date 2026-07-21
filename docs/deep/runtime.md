@@ -8,6 +8,9 @@
 serveXxx(params, options)
   -> 计算 URL 和 context
   -> 计算取消 token
+  -> 如命中重复请求，调用上一次保存的 cancel(message)
+  -> 调用当前请求的 cancel adapter
+  -> 合并 cancel adapter 返回的 extraOptions
   -> hooks.start
   -> request
   -> validate
@@ -44,6 +47,78 @@ request: (url, method, context, extraOptions) => {
         [method === "get" ? "params" : "data"]: context.params,
     });
 }
+```
+
+## 取消请求 adapter
+
+`cancel` adapter 返回两个部分：
+
+-   `cancel`：给 `api-manage` 保存。下次同一个请求进来时，`api-manage` 调用它取消上一次请求。
+-   `extraOptions`：合并后传给 `request` 第四个参数。业务必须在 `request` 里把它继续传给真实请求库。
+
+axios `CancelToken`：
+
+```ts
+import ApiManage, { createAxiosCancel } from "api-manage";
+
+const apiManage = ApiManage.create<typeof apiList>()({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        axios({
+            ...extraOptions,
+            url,
+            method,
+            [method === "get" ? "params" : "data"]: context.params,
+        }),
+    cancel: createAxiosCancel(axios),
+});
+```
+
+fetch、现代 axios、ky、ofetch 等 `AbortController.signal` 模式：
+
+```ts
+import ApiManage, { createAbortCancel } from "api-manage";
+
+const apiManage = ApiManage.create<typeof apiList>()({
+    list: apiList,
+    request: (url, method, context, extraOptions) =>
+        fetch(url, {
+            ...extraOptions,
+            method,
+            body: method === "get" ? undefined : JSON.stringify(context.params),
+        }),
+    cancel: createAbortCancel(),
+});
+```
+
+自定义请求库只要实现同样协议即可：
+
+`ApiManage.create(options)` 和 `new ApiManage(options)` 旧用法仍然兼容；需要从 `cancel().extraOptions` 自动推导 `request.extraOptions` 时，推荐使用 `ApiManage.create<List, ExtraOptions>()({...})`。
+
+```ts
+cancel: () => {
+    const task = createRequestTaskSomehow();
+
+    return {
+        cancel: (message) => task.abort(message),
+        extraOptions: { task },
+    };
+};
+```
+
+如果把 cancel adapter 抽成复用函数，可以标注注入字段类型：
+
+```ts
+import type { CancelAdapterInjectedResult } from "api-manage";
+
+const createTaskCancel = (): CancelAdapterInjectedResult<{ task: Task }> => {
+    const task = createRequestTaskSomehow();
+
+    return {
+        cancel: (message) => task.abort(message),
+        extraOptions: { task },
+    };
+};
 ```
 
 ## 路径模板

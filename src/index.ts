@@ -19,8 +19,61 @@ export type TemplateData =
     | TemplateValue[]
     | Record<string, TemplateValue>
 
+export interface ApiManageDefaultExtraOptions {
+    headers?: Record<string, string | number | boolean | null | undefined>
+}
+
+export type ApiManageExtraOptions<
+    ExtraOptions extends Record<string, any> = {},
+> = Omit<ApiManageDefaultExtraOptions, keyof ExtraOptions> & ExtraOptions
+
+export type ApiManageRequestExtraOptions<
+    ExtraOptions extends Record<string, any> = {},
+    CancelExtraOptions extends Record<string, any> = {},
+> = ApiManageExtraOptions<ExtraOptions> & CancelExtraOptions
+
+export type CancelAdapterResult<ExtraOptions extends Record<string, any>> =
+    | {
+          cancel: (message?: any) => void
+          extraOptions?: Partial<ExtraOptions>
+      }
+    | void
+
+export type CancelAdapterInjectedResult<
+    ExtraOptions extends Record<string, any>,
+> = {
+    cancel: (message?: any) => void
+    extraOptions: ExtraOptions
+}
+
+type CancelExtraOptionsMarker<ExtraOptions extends Record<string, any>> = {
+    readonly __apiManageCancelExtraOptions?: ExtraOptions
+}
+
+export type CancelAdapterWithExtraOptions<
+    ExtraOptions extends Record<string, any>,
+> = ((...args: any[]) => CancelAdapterInjectedResult<ExtraOptions>) &
+    CancelExtraOptionsMarker<ExtraOptions>
+
+export type AxiosCancelLike<CancelToken = unknown> = {
+    CancelToken: new (
+        executor: (cancel: (message?: any) => void) => void,
+    ) => CancelToken
+}
+
+export type AbortControllerLike<Signal = unknown> = {
+    signal: Signal
+    abort: (reason?: any) => void
+}
+
+export type AbortControllerConstructor<Signal = unknown> = new () => AbortControllerLike<Signal>
+
 type MaybePromise<T> = T | PromiseLike<T>
 type AnyFunction = (...args: any[]) => any
+type NoInferType<T> = [T][T extends any ? 0 : never]
+type AwaitedRequestResult<T> = T extends PromiseLike<infer R>
+    ? AwaitedRequestResult<R>
+    : T
 type UnionKeys<T> = T extends T ? keyof T : never
 type UnionToIntersection<T> = (
     T extends any ? (value: T) => void : never
@@ -50,11 +103,6 @@ type ApiItemLimitedResult<Item, RawResult> = Item extends ApiDefine<
 >
     ? LimitedResult
     : LimitResult<RawResult>
-type ApiItemParams<Item, ServeName, Params, ParamsMap> = MappedValue<
-    ParamsMap,
-    ServeName,
-    Item extends ApiDefine<any, infer P, any> ? P : Params
->
 type ServeRawResult<
     List extends ApiList,
     Name extends PropertyKey,
@@ -115,27 +163,33 @@ type RequestContextByApiName<
     Name extends PropertyKey,
     MatchStr extends string,
     ReplaceStr extends string,
+    ExtraOptions extends Record<string, any>,
 > = ApiToServeName<Name, MatchStr, ReplaceStr> extends infer ServeName
     ? ServeName extends string
         ? RequestContext<
               ApiItemByName<List, Name> extends ApiDefine<any, infer P, any>
                   ? P
                   : any,
-              ServeName
+              ServeName,
+              ExtraOptions
           >
         : never
     : never
-type CancelParams<ExtraOptions extends Record<string, any> = {}> = {
+type CancelParams<
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
+> = {
     /** 是否是计算全部路径 */
     isCalcFullPath?: boolean
     /** 当前函数是否开启取消重复请求功能 */
     open?: boolean
     /** 参与取消 token 计算的请求配置 key，例如 headers */
-    includeConfigKeys?: Array<Extract<keyof ExtraOptions, string>>
+    includeConfigKeys?: Array<
+        Extract<keyof ApiManageExtraOptions<ExtraOptions>, string>
+    >
 }
 
-export type ServeFnOptions<
-    ExtraOptions extends Record<string, any> = {},
+export type ApiManageControlOptions<
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
 > = {
     /** 模板数据 */
     tplData?: TemplateData
@@ -143,7 +197,18 @@ export type ServeFnOptions<
     cancelParams?: CancelParams<ExtraOptions>
     /** 当前函数是否开启数据截取功能 */
     isLimit?: boolean
-} & ExtraOptions
+}
+
+export type ServeFnOptions<
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
+> = {
+    /** 模板数据 */
+    tplData?: TemplateData
+    /** 取消函数请求配置 */
+    cancelParams?: CancelParams<ExtraOptions>
+    /** 当前函数是否开启数据截取功能 */
+    isLimit?: boolean
+} & ApiManageExtraOptions<ExtraOptions>
 
 export type ResolvedRequest = {
     url?: string
@@ -162,7 +227,7 @@ export type ServeFunction<
     RawResult = unknown,
     Params = any,
     LimitedResult = LimitResult<RawResult>,
-    ExtraOptions extends Record<string, any> = {},
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
 > = {
     (
         data?: Params,
@@ -188,7 +253,7 @@ export type ApiServiceMap<
     ReplaceStr extends string = 'serve',
     ResultMap extends Record<string, any> = {},
     ParamsMap extends Record<string, any> = {},
-    ExtraOptions extends Record<string, any> = {},
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
 > = {
     [Name in UnionKeys<List[keyof List]> as ApiToServeName<
         Name,
@@ -247,7 +312,7 @@ export type ApiFilesServiceMap<
     Result = unknown,
     ResultMap extends Record<string, any> = {},
     ParamsMap extends Record<string, any> = {},
-    ExtraOptions extends Record<string, any> = {},
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
     MatchStr extends string = 'api',
     ReplaceStr extends string = 'serve',
 > = UnionToIntersection<
@@ -265,23 +330,32 @@ export type ApiFilesServiceMap<
 export type RequestContext<
     Params = unknown,
     ServeName extends string = string,
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
 > = {
     serveName: ServeName
     params?: Params
+    controlOptions: ApiManageControlOptions<ExtraOptions>
 }
 
 export type ApiRequestContextByList<
     List extends ApiList,
     MatchStr extends string = 'api',
     ReplaceStr extends string = 'serve',
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
 > = UnionKeys<List[keyof List]> extends infer Name
     ? Name extends PropertyKey
-        ? RequestContextByApiName<List, Name, MatchStr, ReplaceStr>
+        ? RequestContextByApiName<
+              List,
+              Name,
+              MatchStr,
+              ReplaceStr,
+              ExtraOptions
+          >
         : never
     : never
 
 export type DynamicRequestOptions<
-    ExtraOptions extends Record<string, any> = {},
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
 > = {
     url: string
     method?: string
@@ -290,21 +364,27 @@ export type DynamicRequestOptions<
     serveName?: string
     isLimit?: boolean
     cancelParams?: CancelParams<ExtraOptions>
-    extraOptions?: ExtraOptions
+    extraOptions?: ApiManageExtraOptions<ExtraOptions>
 }
 
 type CancelResult<ExtraOptions extends Record<string, any>> =
+    CancelAdapterResult<ExtraOptions>
+type CancelResultWithExtraOptions<
+    ExtraOptions extends Record<string, any>,
+> = CancelAdapterInjectedResult<ExtraOptions>
+type CancelResultWithoutExtraOptions =
     | {
           cancel: (message?: any) => void
-          extraOptions?: Partial<ExtraOptions>
+          extraOptions?: undefined
       }
     | void
 
 type CancelTokenOptions<ExtraOptions extends Record<string, any>> = {
     url: string
     method?: string
-    context: RequestContext<any, string>
-    extraOptions?: ExtraOptions
+    context: Pick<RequestContext<any, string, ExtraOptions>, 'serveName' | 'params'> &
+        Partial<Pick<RequestContext<any, string, ExtraOptions>, 'controlOptions'>>
+    extraOptions?: ApiManageExtraOptions<ExtraOptions>
 }
 
 type Hooks<ServeName extends string = string> = {
@@ -324,9 +404,10 @@ type Hooks<ServeName extends string = string> = {
 
 export interface ApiManageOptions<
     List extends ApiList = ApiList,
-    ExtraOptions extends Record<string, any> = {},
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
     MatchStr extends string = 'api',
     ReplaceStr extends string = 'serve',
+    RequestResult = any,
 >
     extends Partial<{
         matchStr: MatchStr
@@ -338,17 +419,22 @@ export interface ApiManageOptions<
     request: (
         url: string,
         method: ApiMethodName<List>,
-        context: ApiRequestContextByList<List, MatchStr, ReplaceStr>,
-        extraOptions?: ExtraOptions,
-    ) => any
+        context: ApiRequestContextByList<
+            List,
+            MatchStr,
+            ReplaceStr,
+            ExtraOptions
+        >,
+        extraOptions?: ApiManageExtraOptions<ExtraOptions>,
+    ) => RequestResult
     /** 处理 response 的数据格式 */
     limitResponse?: (
-        res: any,
+        res: AwaitedRequestResult<RequestResult>,
         serveName?: ApiServeName<List, MatchStr, ReplaceStr>,
     ) => any
     /** 验证请求结果是否通过 */
     validate?: (
-        response?: any,
+        response: AwaitedRequestResult<RequestResult>,
         serveName?: ApiServeName<List, MatchStr, ReplaceStr>,
     ) => MaybePromise<boolean>
     /** 自定义请求 函数处理 */
@@ -365,11 +451,120 @@ export interface ApiManageOptions<
     cancel?: (
         url: string,
         method: ApiMethodName<List>,
-        context: ApiRequestContextByList<List, MatchStr, ReplaceStr>,
-        extraOptions?: ExtraOptions,
-    ) => CancelResult<ExtraOptions>
+        context: ApiRequestContextByList<
+            List,
+            MatchStr,
+            ReplaceStr,
+            ExtraOptions
+        >,
+        extraOptions?: ApiManageExtraOptions<ExtraOptions>,
+    ) => CancelResult<Record<string, any>>
     /** 钩子函数 */
     hooks?: Hooks<ApiServeName<List, MatchStr, ReplaceStr>>
+}
+
+export interface ApiManageCreateOptions<
+    List extends ApiList = ApiList,
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
+    CancelExtraOptions extends Record<string, any> = {},
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
+    RequestResult = any,
+>
+    extends Omit<
+        ApiManageOptions<
+            List,
+            ExtraOptions,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >,
+        'request' | 'cancel'
+    > {
+    /** 请求函数。配置 cancel 时，extraOptions 会额外合并 cancel adapter 注入的字段。 */
+    request: (
+        url: string,
+        method: ApiMethodName<List>,
+        context: ApiRequestContextByList<
+            List,
+            MatchStr,
+            ReplaceStr,
+            ExtraOptions
+        >,
+        extraOptions?: ApiManageRequestExtraOptions<
+            ExtraOptions,
+            NoInferType<CancelExtraOptions>
+        >,
+    ) => RequestResult
+    /** 创建通用取消请求处理 */
+    cancel?: (
+        url: string,
+        method: ApiMethodName<List>,
+        context: ApiRequestContextByList<
+            List,
+            MatchStr,
+            ReplaceStr,
+            ExtraOptions
+        >,
+        extraOptions?: ApiManageExtraOptions<ExtraOptions>,
+    ) => CancelResult<CancelExtraOptions>
+}
+
+type ApiManageCreateCancelFunction<
+    List extends ApiList,
+    ExtraOptions extends Record<string, any>,
+    MatchStr extends string,
+    ReplaceStr extends string,
+> = (
+    url: string,
+    method: ApiMethodName<List>,
+    context: ApiRequestContextByList<List, MatchStr, ReplaceStr, ExtraOptions>,
+    extraOptions?: ApiManageExtraOptions<ExtraOptions>,
+) => CancelResultWithoutExtraOptions
+
+type ApiManageCreateOptionsWithInjectedCancel<
+    List extends ApiList,
+    ExtraOptions extends Record<string, any>,
+    CancelExtraOptions extends Record<string, any>,
+    MatchStr extends string,
+    ReplaceStr extends string,
+    RequestResult,
+> = Omit<
+    ApiManageOptions<
+        List,
+        ExtraOptions,
+        MatchStr,
+        ReplaceStr,
+        RequestResult
+    >,
+    'request' | 'cancel'
+> & {
+    request: (
+        url: string,
+        method: ApiMethodName<List>,
+        context: ApiRequestContextByList<
+            List,
+            MatchStr,
+            ReplaceStr,
+            ExtraOptions
+        >,
+        extraOptions?: ApiManageRequestExtraOptions<
+            ExtraOptions,
+            NoInferType<CancelExtraOptions>
+        >,
+    ) => RequestResult
+    cancel: ((
+        url: string,
+        method: ApiMethodName<List>,
+        context: ApiRequestContextByList<
+            List,
+            MatchStr,
+            ReplaceStr,
+            ExtraOptions
+        >,
+        extraOptions?: ApiManageExtraOptions<ExtraOptions>,
+    ) => CancelResultWithExtraOptions<CancelExtraOptions>) &
+        CancelExtraOptionsMarker<CancelExtraOptions>
 }
 
 type FullApiManageOptions<
@@ -377,27 +572,53 @@ type FullApiManageOptions<
     ExtraOptions extends Record<string, any>,
     MatchStr extends string,
     ReplaceStr extends string,
+    RequestResult,
 > = Required<
     Omit<
-        ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>,
+        ApiManageOptions<
+            List,
+            ExtraOptions,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >,
         'cancel' | 'hooks' | 'customize' | 'limitResponse' | 'validate'
     >
 > & {
-    cancel?: ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>['cancel']
+    cancel?: ApiManageOptions<
+        List,
+        ExtraOptions,
+        MatchStr,
+        ReplaceStr,
+        RequestResult
+    >['cancel']
     hooks: Hooks<ApiServeName<List, MatchStr, ReplaceStr>>
     customize: NonNullable<
-        ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>['customize']
+        ApiManageOptions<
+            List,
+            ExtraOptions,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >['customize']
     >
     limitResponse: NonNullable<
         ApiManageOptions<
             List,
             ExtraOptions,
             MatchStr,
-            ReplaceStr
+            ReplaceStr,
+            RequestResult
         >['limitResponse']
     >
     validate: NonNullable<
-        ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>['validate']
+        ApiManageOptions<
+            List,
+            ExtraOptions,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >['validate']
     >
 }
 
@@ -409,7 +630,7 @@ type ExecuteRequestParams<ExtraOptions extends Record<string, any>> = {
     tplData?: TemplateData
     cancelParams?: CancelParams<ExtraOptions>
     isLimit?: boolean
-    extraOptions?: ExtraOptions
+    extraOptions?: ApiManageExtraOptions<ExtraOptions>
 }
 
 const getType = (obj: any) =>
@@ -425,12 +646,55 @@ export const defineApi = <
     url: string,
 ): ApiDefine<RawResult, Params, LimitedResult> => ({ url })
 
+export const createAxiosCancel =
+    <CancelToken = unknown>(
+        axios: AxiosCancelLike<CancelToken>,
+    ): CancelAdapterWithExtraOptions<{
+        cancelToken?: CancelToken
+    }> =>
+    (() => {
+        let cancel!: (message?: any) => void
+        const cancelToken = new axios.CancelToken((fn) => {
+            cancel = fn
+        })
+
+        return {
+            cancel,
+            extraOptions: { cancelToken },
+        }
+    }) as CancelAdapterWithExtraOptions<{ cancelToken?: CancelToken }>
+
+export const createAbortCancel =
+    <Signal = unknown>(
+        AbortControllerClass?: AbortControllerConstructor<Signal>,
+    ): CancelAdapterWithExtraOptions<{
+        signal?: Signal
+    }> =>
+    (() => {
+        const Controller =
+            AbortControllerClass || (globalThis as any).AbortController
+
+        if (!Controller) {
+            throw new Error(
+                'api-manage: AbortController is not available, please pass a compatible constructor to createAbortCancel.',
+            )
+        }
+
+        const controller = new Controller()
+
+        return {
+            cancel: (message?: any) => controller.abort(message),
+            extraOptions: { signal: controller.signal },
+        }
+    }) as CancelAdapterWithExtraOptions<{ signal?: Signal }>
+
 class ApiManage<
     List extends ApiList = ApiList,
-    ExtraOptions extends Record<string, any> = {},
+    ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
     Result = unknown,
     MatchStr extends string = 'api',
     ReplaceStr extends string = 'serve',
+    RequestResult = any,
 > {
     /**
      * 将多个api清单文件 合并成一个
@@ -483,7 +747,7 @@ class ApiManage<
             method,
             url,
             context,
-            extraOptions = {} as ExtraOptions,
+            extraOptions = {} as ApiManageExtraOptions<ExtraOptions>,
         } = requestParams
         const isCalcFullPath =
             typeof cancelParams === 'boolean'
@@ -517,6 +781,131 @@ class ApiManage<
                       ),
               )
             : url
+    }
+
+    static create<
+        List extends ApiList = ApiList,
+        ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
+        Result = unknown,
+    >(): {
+        <
+            CancelExtraOptions extends Record<string, any>,
+            RequestResult,
+            MatchStr extends string = 'api',
+            ReplaceStr extends string = 'serve',
+        >(
+            options: ApiManageCreateOptionsWithInjectedCancel<
+                List,
+                ExtraOptions,
+                CancelExtraOptions,
+                MatchStr,
+                ReplaceStr,
+                RequestResult
+            >,
+        ): ApiManage<
+            List,
+            ExtraOptions,
+            Result,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >
+        <
+            RequestResult,
+            MatchStr extends string = 'api',
+            ReplaceStr extends string = 'serve',
+        >(
+            options: ApiManageCreateOptions<
+                List,
+                ExtraOptions,
+                {},
+                MatchStr,
+                ReplaceStr,
+                RequestResult
+            > & {
+                cancel: ApiManageCreateCancelFunction<
+                    List,
+                    ExtraOptions,
+                    MatchStr,
+                    ReplaceStr
+                >
+            },
+        ): ApiManage<
+            List,
+            ExtraOptions,
+            Result,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >
+        <
+            RequestResult,
+            MatchStr extends string = 'api',
+            ReplaceStr extends string = 'serve',
+        >(
+            options: ApiManageCreateOptions<
+                List,
+                ExtraOptions,
+                {},
+                MatchStr,
+                ReplaceStr,
+                RequestResult
+            > & { cancel?: undefined },
+        ): ApiManage<
+            List,
+            ExtraOptions,
+            Result,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >
+    }
+    static create<
+        List extends ApiList = ApiList,
+        ExtraOptions extends Record<string, any> = ApiManageDefaultExtraOptions,
+        CancelExtraOptions extends Record<string, any> = {},
+        Result = unknown,
+        MatchStr extends string = 'api',
+        ReplaceStr extends string = 'serve',
+        RequestResult = any,
+    >(
+        options: ApiManageCreateOptions<
+            List,
+            ExtraOptions,
+            CancelExtraOptions,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >,
+    ): ApiManage<
+        List,
+        ExtraOptions,
+        Result,
+        MatchStr,
+        ReplaceStr,
+        RequestResult
+    >
+    static create(
+        options?: ApiManageCreateOptions<any, any, any, any, any, any>,
+    ): any {
+        const createInstance = (
+            nextOptions: ApiManageCreateOptions<any, any, any, any, any, any>,
+        ) =>
+            new ApiManage(
+                nextOptions as unknown as ApiManageOptions<
+                    any,
+                    any,
+                    any,
+                    any,
+                    any
+                >,
+            )
+
+        if (!options) {
+            return createInstance
+        }
+
+        return createInstance(options)
     }
 
     /**
@@ -633,11 +1022,18 @@ class ApiManage<
         List,
         ExtraOptions,
         MatchStr,
-        ReplaceStr
+        ReplaceStr,
+        RequestResult
     >
 
     constructor(
-        options: ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>,
+        options: ApiManageOptions<
+            List,
+            ExtraOptions,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >,
     ) {
         this.options = this.mergeOptions(options)
 
@@ -704,7 +1100,7 @@ class ApiManage<
         serveName = 'dynamicRequest',
         isLimit = true,
         cancelParams = {},
-        extraOptions = {} as ExtraOptions,
+        extraOptions = {} as ApiManageExtraOptions<ExtraOptions>,
     }: DynamicRequestOptions<ExtraOptions>): Promise<R> {
         return this.executeRequest<R>({
             method,
@@ -829,10 +1225,28 @@ class ApiManage<
     }
 
     private mergeOptions(
-        options: ApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>,
-    ): FullApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr> {
+        options: ApiManageOptions<
+            List,
+            ExtraOptions,
+            MatchStr,
+            ReplaceStr,
+            RequestResult
+        >,
+    ): FullApiManageOptions<
+        List,
+        ExtraOptions,
+        MatchStr,
+        ReplaceStr,
+        RequestResult
+    > {
         const defaultOptions: Omit<
-            FullApiManageOptions<List, ExtraOptions, MatchStr, ReplaceStr>,
+            FullApiManageOptions<
+                List,
+                ExtraOptions,
+                MatchStr,
+                ReplaceStr,
+                RequestResult
+            >,
             'list' | 'request'
         > = {
             matchStr: 'api' as MatchStr,
@@ -870,7 +1284,7 @@ class ApiManage<
                 tplData: tplData as TemplateData,
                 cancelParams: cancelParams as CancelParams<ExtraOptions>,
                 isLimit,
-                extraOptions: config as ExtraOptions,
+                extraOptions: config as ApiManageExtraOptions<ExtraOptions>,
             })
         }) as ServeFunction<any, any, any, ExtraOptions>
     }
@@ -945,7 +1359,7 @@ class ApiManage<
         tplData = {},
         cancelParams = {},
         isLimit = true,
-        extraOptions = {} as ExtraOptions,
+        extraOptions = {} as ApiManageExtraOptions<ExtraOptions>,
     }: ExecuteRequestParams<ExtraOptions>): Promise<R> {
         const normalizedMethod = method || 'get'
         const url = ApiManage.template(path, tplData)
@@ -954,7 +1368,7 @@ class ApiManage<
         const timestamp = `${Date.now()}`
         let requestExtraOptions = {
             ...extraOptions,
-        } as ExtraOptions
+        } as ApiManageExtraOptions<ExtraOptions>
         const typedServeName = serveName as ApiServeName<
             List,
             MatchStr,
@@ -964,7 +1378,12 @@ class ApiManage<
         const requestContext = {
             serveName: typedServeName,
             params,
-        } as ApiRequestContextByList<List, MatchStr, ReplaceStr>
+            controlOptions: {
+                tplData,
+                cancelParams,
+                isLimit,
+            },
+        } as ApiRequestContextByList<List, MatchStr, ReplaceStr, ExtraOptions>
         const clearCurrentCancelToken = () => {
             if (
                 requestToken &&
@@ -1028,13 +1447,17 @@ class ApiManage<
                     requestExtraOptions,
                 ),
             )
-            .then((res) =>
-                Promise.resolve(this.options.validate(res, typedServeName)).then(
+            .then((res) => {
+                const response = res as AwaitedRequestResult<RequestResult>
+
+                return Promise.resolve(
+                    this.options.validate(response, typedServeName),
+                ).then(
                     (isValid) => {
                         if (!isValid) {
                             throw {
                                 error: 'api-manage validate false',
-                                response: res,
+                                response,
                             }
                         }
 
@@ -1048,14 +1471,14 @@ class ApiManage<
                         ).then(() =>
                             isLimit
                                 ? this.options.limitResponse(
-                                      res,
+                                      response,
                                       typedServeName,
                                   )
-                                : res,
+                                : response,
                         )
                     },
-                ),
-            )
+                )
+            })
             .then(
                 (value) =>
                     Promise.resolve(
