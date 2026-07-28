@@ -100,6 +100,55 @@ apis.serveGetUser({ id: 1 }, { isLimit: false });
 apis.serveGetUser<ApiResponse<UserInfo>>({ id: 1 }, options);
 ```
 
+## 提取请求和返回类型
+
+可以从 `apiList` 按 `serveXxx` 名称提取 `defineApi` 绑定的请求参数、默认返回结果和原始返回结果：
+
+```ts
+import type {
+    ApiDefineParams,
+    ApiDefineRawResult,
+    ApiDefineResult,
+} from "api-manage";
+
+type Params = ApiDefineParams<typeof apiList, "serveGetUser">;
+// { id: number }
+
+type Result = ApiDefineResult<typeof apiList, "serveGetUser">;
+// UserInfo
+
+type Raw = ApiDefineRawResult<typeof apiList, "serveGetUser">;
+// ApiResponse<UserInfo>
+```
+
+如果业务代码更常使用 `getService()` 的返回值，也可以从 service 中提取：
+
+```ts
+import type {
+    ApiServeParams,
+    ApiServeRawResult,
+    ApiServeResult,
+} from "api-manage";
+
+const apis = apiManage.getService();
+
+type Params = ApiServeParams<typeof apis, "serveGetUser">;
+type Result = ApiServeResult<typeof apis, "serveGetUser">;
+type Raw = ApiServeRawResult<typeof apis, "serveGetUser">;
+```
+
+业务侧需要更短写法时，可以自行绑定当前项目的 service 类型：
+
+```ts
+const useApis = () => apiManage.getService();
+
+type Apis = ReturnType<typeof useApis>;
+type ApiServeName = Extract<keyof Apis, string>;
+
+type ApiServeNameParams<T extends ApiServeName> = ApiServeParams<Apis, T>;
+type ApiServeNameResult<T extends ApiServeName> = ApiServeResult<Apis, T>;
+```
+
 ## 请求函数名类型
 
 请求函数名会从 `List` 自动推导，默认规则是 `apiXxx -> serveXxx`。`getService()`、`abort()`、`resolve()`、hooks、`validate()`、`limitResponse()` 使用同一组 service name 类型。
@@ -244,10 +293,16 @@ const apis = apiManage.getService();
 ```ts
 import type {
     ApiDefine,
+    ApiDefineParams,
+    ApiDefineRawResult,
+    ApiDefineResult,
     ApiFilesServiceMap,
     ApiList,
     ApiServiceMap,
     ApiRequestContextByList,
+    ApiServeParams,
+    ApiServeRawResult,
+    ApiServeResult,
     DynamicRequestOptions,
     LimitResult,
     RequestContext,
@@ -259,9 +314,15 @@ import type {
 ```
 
 -   `ApiDefine`：`defineApi` 返回的对象类型
+-   `ApiDefineParams`：从 `apiList` 按 service name 提取请求参数类型
+-   `ApiDefineResult`：从 `apiList` 按 service name 提取默认返回结果类型
+-   `ApiDefineRawResult`：从 `apiList` 按 service name 提取原始完整响应类型
 -   `ApiList`：API 清单类型
 -   `ApiServiceMap`：单个清单生成的 service map 类型
 -   `ApiFilesServiceMap`：多个清单合并后的 service map 类型
+-   `ApiServeParams`：从 service 按 service name 提取请求参数类型
+-   `ApiServeResult`：从 service 按 service name 提取默认返回结果类型
+-   `ApiServeRawResult`：从 service 按 service name 提取原始完整响应类型
 -   `RequestContext`：`request` 第三个参数的基础上下文类型
 -   `ApiRequestContextByList`：根据清单推导出来的请求上下文 union
 -   `ServeFunction`：请求函数类型

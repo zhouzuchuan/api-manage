@@ -1,7 +1,13 @@
 import ApiManage, {
+    ApiDefineParams,
+    ApiDefineRawResult,
+    ApiDefineResult,
     ApiRequestContextByList,
     ApiFilesServiceMap,
     ApiList,
+    ApiServeParams,
+    ApiServeRawResult,
+    ApiServeResult,
     CancelAdapterInjectedResult,
     ServeFnOptions,
     TemplateData,
@@ -124,6 +130,69 @@ typedService.serveBase_GetOcrResult({ taskId: "task-1" }).then((result) => {
     return status;
 });
 
+const apiDefineParams: ApiDefineParams<
+    typeof typedApi,
+    "serveBase_GetOcrResult"
+> = { taskId: "task-1" };
+const apiServeParams: ApiServeParams<
+    typeof typedService,
+    "serveBase_GetOcrResult"
+> = { taskId: "task-1" };
+const apiDefineResult: ApiDefineResult<
+    typeof typedApi,
+    "serveBase_GetOcrResult"
+> = { status: "pending" };
+const apiServeResult: ApiServeResult<
+    typeof typedService,
+    "serveBase_GetOcrResult"
+> = { status: "success" };
+const apiDefineRawResult: ApiDefineRawResult<
+    typeof typedApi,
+    "serveBase_GetOcrResult"
+> = {
+    code: 0,
+    message: "ok",
+    data: { status: "fail" },
+};
+const apiServeRawResult: ApiServeRawResult<
+    typeof typedService,
+    "serveBase_GetOcrResult"
+> = {
+    code: 0,
+    message: "ok",
+    data: { status: "success" },
+};
+
+void apiDefineParams;
+void apiServeParams;
+void apiDefineResult;
+void apiServeResult;
+void apiDefineRawResult;
+void apiServeRawResult;
+
+const customReplaceDefineParams: ApiDefineParams<
+    typeof typedApi,
+    "requestBase_GetOcrResult",
+    "api",
+    "request"
+> = { taskId: "task-1" };
+
+void customReplaceDefineParams;
+
+const invalidApiDefineParams: ApiDefineParams<
+    typeof typedApi,
+    "serveBase_GetOcrResult"
+> =
+    // @ts-expect-error ApiDefineParams should preserve defineApi params.
+    { id: "task-1" };
+
+const invalidApiServeParams: ApiServeParams<
+    typeof typedService,
+    "serveBase_GetOcrResult"
+> =
+    // @ts-expect-error ApiServeParams should preserve service params.
+    { id: "task-1" };
+
 typedService
     .serveBase_GetOcrResult({ taskId: "task-1" }, { isLimit: true })
     .then((result) => {
@@ -202,6 +271,41 @@ customLimitService
         const status: OcrResult["status"] = result.ret.status;
         return status;
     });
+
+const customLimitDefineResult: ApiDefineResult<
+    typeof customLimitApi,
+    "serveCustom_GetOcrResult"
+> = { status: "pending" };
+const customLimitServeResult: ApiServeResult<
+    typeof customLimitService,
+    "serveCustom_GetOcrResult"
+> = { status: "success" };
+const customLimitDefineRawResult: ApiDefineRawResult<
+    typeof customLimitApi,
+    "serveCustom_GetOcrResult"
+> = {
+    code: 0,
+    ret: { status: "fail" },
+};
+const customLimitServeRawResult: ApiServeRawResult<
+    typeof customLimitService,
+    "serveCustom_GetOcrResult"
+> = {
+    code: 0,
+    ret: { status: "success" },
+};
+
+void customLimitDefineResult;
+void customLimitServeResult;
+void customLimitDefineRawResult;
+void customLimitServeRawResult;
+
+type MissingDefineParams = ApiDefineParams<typeof typedApi, "serveMissing">;
+// @ts-expect-error missing define serveName should resolve to never.
+const missingDefineParams: MissingDefineParams = {};
+
+// @ts-expect-error missing service serveName should be rejected.
+type MissingServeParams = ApiServeParams<typeof typedService, "serveMissing">;
 
 type TypedServices = ApiFilesServiceMap<{
     typedApi: typeof typedApi;

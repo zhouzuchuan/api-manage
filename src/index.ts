@@ -91,6 +91,18 @@ type ApiItemByName<List extends ApiList, Name extends PropertyKey> =
 type MappedValue<Map, Name, Fallback> = Name extends keyof Map
     ? Map[Name]
     : Fallback
+type ApiItemByServeName<
+    List extends ApiList,
+    ServeName extends string,
+    MatchStr extends string,
+    ReplaceStr extends string,
+> = UnionKeys<List[keyof List]> extends infer Name
+    ? Name extends PropertyKey
+        ? ApiToServeName<Name, MatchStr, ReplaceStr> extends ServeName
+            ? ApiItemByName<List, Name>
+            : never
+        : never
+    : never
 type ApiItemRawResult<Item, ServeName, Result, ResultMap> = MappedValue<
     ResultMap,
     ServeName,
@@ -103,6 +115,21 @@ type ApiItemLimitedResult<Item, RawResult> = Item extends ApiDefine<
 >
     ? LimitedResult
     : LimitResult<RawResult>
+type ApiDefineItemParams<Item> = [Item] extends [never]
+    ? never
+    : Item extends ApiDefine<any, infer Params, any>
+    ? Params
+    : never
+type ApiDefineItemResult<Item> = [Item] extends [never]
+    ? never
+    : Item extends ApiDefine<any, any, infer LimitedResult>
+    ? LimitedResult
+    : never
+type ApiDefineItemRawResult<Item> = [Item] extends [never]
+    ? never
+    : Item extends ApiDefine<infer RawResult, any, any>
+    ? RawResult
+    : never
 type ServeRawResult<
     List extends ApiList,
     Name extends PropertyKey,
@@ -157,6 +184,54 @@ type ApiServeName<
     MatchStr extends string = 'api',
     ReplaceStr extends string = 'serve',
 > = ApiToServeName<UnionKeys<List[keyof List]>, MatchStr, ReplaceStr>
+
+export type ApiDefineParams<
+    List extends ApiList,
+    ServeName extends string,
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
+> = ApiDefineItemParams<
+    ApiItemByServeName<List, ServeName, MatchStr, ReplaceStr>
+>
+
+export type ApiDefineResult<
+    List extends ApiList,
+    ServeName extends string,
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
+> = ApiDefineItemResult<
+    ApiItemByServeName<List, ServeName, MatchStr, ReplaceStr>
+>
+
+export type ApiDefineRawResult<
+    List extends ApiList,
+    ServeName extends string,
+    MatchStr extends string = 'api',
+    ReplaceStr extends string = 'serve',
+> = ApiDefineItemRawResult<
+    ApiItemByServeName<List, ServeName, MatchStr, ReplaceStr>
+>
+
+export type ApiServeParams<
+    Service,
+    ServeName extends keyof Service,
+> = Service[ServeName] extends ServeFunction<any, infer Params, any, any>
+    ? Params
+    : never
+
+export type ApiServeResult<
+    Service,
+    ServeName extends keyof Service,
+> = Service[ServeName] extends ServeFunction<any, any, infer LimitedResult, any>
+    ? LimitedResult
+    : never
+
+export type ApiServeRawResult<
+    Service,
+    ServeName extends keyof Service,
+> = Service[ServeName] extends ServeFunction<infer RawResult, any, any, any>
+    ? RawResult
+    : never
 type ApiMethodName<List extends ApiList> = Extract<keyof List, string>
 type RequestContextByApiName<
     List extends ApiList,
